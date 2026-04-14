@@ -1,0 +1,13 @@
+{
+  "name": "decree-typescript-examples",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@opendecree/sdk": ">=0.1.0"
+  }
+}

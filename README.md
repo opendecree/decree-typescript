@@ -8,6 +8,8 @@
 
 TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-driven configuration management.
 
+> **Alpha** -- This SDK is under active development. APIs and behavior may change without notice between versions.
+
 ## Install
 
 ```bash
@@ -77,6 +79,17 @@ for await (const change of fee) {
 await watcher.stop();
 client.close();
 ```
+
+## Examples
+
+Runnable examples in the [`examples/`](examples/) directory:
+
+| Example | What it shows |
+|---------|--------------|
+| [quickstart](examples/quickstart/) | Type converters (`Number`, `Boolean`), try/finally |
+| [live-config](examples/live-config/) | `ConfigWatcher`, `.on('change')`, `for await...of` |
+| [nextjs-integration](examples/nextjs-integration/) | Singleton watcher for server-side config |
+| [error-handling](examples/error-handling/) | `RetryConfig`, `{ nullable: true }`, `instanceof` narrowing |
 
 ## Documentation
 

@@ -1,7 +1,7 @@
 {
   "name": "@opendecree/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for OpenDecree — schema-driven configuration management",
+  "description": "TypeScript SDK for OpenDecree — schema-driven configuration management (alpha)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

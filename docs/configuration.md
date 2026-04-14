@@ -44,6 +44,21 @@ const client = new ConfigClient('localhost:9090', {
 The server reads `x-subject`, `x-role`, and `x-tenant-id` from request
 metadata to determine authorization.
 
+Non-superadmin roles require a `tenantId`. For users with access to multiple
+tenants, pass a comma-separated list:
+
+```typescript
+const client = new ConfigClient('localhost:9090', {
+  subject: 'alice',
+  role: 'admin',
+  tenantId: 'tenant-1,tenant-2', // access to multiple tenants
+});
+```
+
+Each API call specifies which tenant to operate on via the `tenantId`
+parameter. The server validates that the requested tenant is in the
+caller's allowed list.
+
 ### JWT Authentication
 
 For production deployments with JWT enabled on the server:
@@ -55,9 +70,10 @@ const client = new ConfigClient('production:9090', {
 });
 ```
 
-When `token` is set, the SDK sends it as a `Bearer` token in the
-`authorization` metadata header. The `subject`, `role`, and `tenantId`
-options are ignored.
+The JWT `tenant_ids` claim (array) determines which tenants the caller
+can access. When `token` is set, the SDK sends it as a `Bearer` token
+in the `authorization` metadata header. The `subject`, `role`, and
+`tenantId` options are ignored.
 
 ## TLS
 
