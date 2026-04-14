@@ -1,0 +1,34 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci
+      - run: npm run build
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
+      - name: Remove temp npmrc so npm uses OIDC
+        run: rm -f "$NPM_CONFIG_USERCONFIG"
+      - run: npm publish --provenance --access public
