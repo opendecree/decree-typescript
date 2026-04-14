@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "pre-commit": "biome check src/ test/ && tsc --noEmit && vitest run",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

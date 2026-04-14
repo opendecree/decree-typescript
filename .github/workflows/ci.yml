@@ -1,3 +1,8 @@
+# CI pipeline for the OpenDecree TypeScript SDK.
+#
+# Jobs: lint, typecheck, test (matrix: Node 20/22/24), examples → check (alls-green gate)
+# The check job aggregates all results for branch protection.
+
 name: CI
 
 on:
@@ -9,49 +14,102 @@ on:
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
-      - run: npm run lint
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run biome lint
+        run: npm run lint
 
   typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tsc
+        run: npm run typecheck
 
   test:
+    name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node-version: ["20", "22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm ci
-      - run: npm run test:coverage
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
   examples:
+    name: Examples
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
-      - run: cd examples && npm install
-      - run: cd examples && npx tsc --noEmit
+
+      - name: Install SDK dependencies
+        run: npm ci
+
+      - name: Install example dependencies
+        run: cd examples && npm install
+
+      - name: Typecheck examples
+        run: cd examples && npx tsc --noEmit
+
+  check:
+    name: CI check
+    if: always()
+    needs: [lint, typecheck, test, examples]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
