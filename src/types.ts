@@ -23,11 +23,17 @@ export interface Change {
 	readonly changedBy: string;
 }
 
-/** Server version information from the VersionService. */
-export interface ServerVersion {
+/** Server info from the ServerService (version, commit, enabled features). */
+export interface ServerInfo {
 	readonly version: string;
 	readonly commit: string;
+	readonly features: { readonly [key: string]: boolean };
 }
+
+/**
+ * @deprecated Use ServerInfo instead.
+ */
+export type ServerVersion = ServerInfo;
 
 /** Configuration for retry behavior. */
 export interface RetryConfig {

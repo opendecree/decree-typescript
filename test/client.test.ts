@@ -15,9 +15,9 @@ vi.mock("../src/generated/centralconfig/v1/config_service.js", () => {
 	return { ConfigServiceClient: MockConfigServiceClient };
 });
 
-vi.mock("../src/generated/centralconfig/v1/version_service.js", () => {
-	const MockVersionServiceClient = vi.fn();
-	return { VersionServiceClient: MockVersionServiceClient };
+vi.mock("../src/generated/centralconfig/v1/server_service.js", () => {
+	const MockServerServiceClient = vi.fn();
+	return { ServerServiceClient: MockServerServiceClient };
 });
 
 function makeServiceError(code: number, details: string): ServiceError {
@@ -31,12 +31,12 @@ function makeServiceError(code: number, details: string): ServiceError {
 describe("ConfigClient", () => {
 	let client: ConfigClient;
 	let configStub: Record<string, MockInstance>;
-	let versionStub: Record<string, MockInstance>;
+	let serverStub: Record<string, MockInstance>;
 
 	beforeEach(async () => {
 		// Get the mocked constructors.
 		const configMod = await import("../src/generated/centralconfig/v1/config_service.js");
-		const versionMod = await import("../src/generated/centralconfig/v1/version_service.js");
+		const serverMod = await import("../src/generated/centralconfig/v1/server_service.js");
 
 		configStub = {
 			getField: vi.fn(),
@@ -46,14 +46,14 @@ describe("ConfigClient", () => {
 			close: vi.fn(),
 		};
 
-		versionStub = {
-			getServerVersion: vi.fn(),
+		serverStub = {
+			getServerInfo: vi.fn(),
 			close: vi.fn(),
 		};
 
 		// Make the constructor return our stubs.
 		(configMod.ConfigServiceClient as unknown as MockInstance).mockReturnValue(configStub);
-		(versionMod.VersionServiceClient as unknown as MockInstance).mockReturnValue(versionStub);
+		(serverMod.ServerServiceClient as unknown as MockInstance).mockReturnValue(serverStub);
 
 		client = new ConfigClient("localhost:9090", {
 			subject: "testuser",
@@ -280,38 +280,57 @@ describe("ConfigClient", () => {
 		});
 	});
 
-	describe("serverVersion", () => {
-		it("fetches and caches server version", async () => {
-			versionStub.getServerVersion.mockImplementation(
+	describe("serverInfo", () => {
+		it("fetches and caches server info", async () => {
+			serverStub.getServerInfo.mockImplementation(
 				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
-					cb(null, { version: "0.3.1", commit: "abc123" });
+					cb(null, {
+						version: "0.8.0",
+						commit: "abc123",
+						features: { config: true, schema: true },
+					});
 				},
 			);
 
-			const v1 = await client.serverVersion;
-			const v2 = await client.serverVersion;
+			const v1 = await client.serverInfo;
+			const v2 = await client.serverInfo;
 
-			expect(v1).toEqual({ version: "0.3.1", commit: "abc123" });
+			expect(v1).toEqual({
+				version: "0.8.0",
+				commit: "abc123",
+				features: { config: true, schema: true },
+			});
 			expect(v2).toBe(v1); // same promise
-			expect(versionStub.getServerVersion).toHaveBeenCalledTimes(1);
+			expect(serverStub.getServerInfo).toHaveBeenCalledTimes(1);
 		});
 
-		it("maps gRPC errors from version service", async () => {
-			versionStub.getServerVersion.mockImplementation(
+		it("maps gRPC errors from server service", async () => {
+			serverStub.getServerInfo.mockImplementation(
 				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
 					cb(makeServiceError(status.UNAVAILABLE, "server down"));
 				},
 			);
 
-			await expect(client.serverVersion).rejects.toThrow(UnavailableError);
+			await expect(client.serverInfo).rejects.toThrow(UnavailableError);
+		});
+
+		it("exposes deprecated serverVersion alias", async () => {
+			serverStub.getServerInfo.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { version: "0.8.0", commit: "abc123", features: {} });
+				},
+			);
+
+			const sv = await client.serverVersion;
+			expect(sv.version).toBe("0.8.0");
 		});
 	});
 
 	describe("checkCompatibility()", () => {
 		it("succeeds for compatible version", async () => {
-			versionStub.getServerVersion.mockImplementation(
+			serverStub.getServerInfo.mockImplementation(
 				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
-					cb(null, { version: "0.5.0", commit: "abc" });
+					cb(null, { version: "0.8.0", commit: "abc", features: {} });
 				},
 			);
 
@@ -319,9 +338,9 @@ describe("ConfigClient", () => {
 		});
 
 		it("throws IncompatibleServerError for bad version", async () => {
-			versionStub.getServerVersion.mockImplementation(
+			serverStub.getServerInfo.mockImplementation(
 				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
-					cb(null, { version: "0.1.0", commit: "abc" });
+					cb(null, { version: "0.1.0", commit: "abc", features: {} });
 				},
 			);
 
@@ -343,7 +362,7 @@ describe("ConfigClient", () => {
 		it("closes both stubs", () => {
 			client.close();
 			expect(configStub.close).toHaveBeenCalledTimes(1);
-			expect(versionStub.close).toHaveBeenCalledTimes(1);
+			expect(serverStub.close).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -351,7 +370,7 @@ describe("ConfigClient", () => {
 		it("calls close()", () => {
 			client[Symbol.dispose]();
 			expect(configStub.close).toHaveBeenCalledTimes(1);
-			expect(versionStub.close).toHaveBeenCalledTimes(1);
+			expect(serverStub.close).toHaveBeenCalledTimes(1);
 		});
 	});
 
