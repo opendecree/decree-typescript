@@ -3,11 +3,11 @@ import { PROTO_VERSION, SUPPORTED_SERVER_VERSION, VERSION } from "../src/index.j
 
 describe("version constants", () => {
 	it("exports SDK version", () => {
-		expect(VERSION).toBe("0.1.0");
+		expect(VERSION).toBe("0.2.0-alpha.1");
 	});
 
 	it("exports supported server version range", () => {
-		expect(SUPPORTED_SERVER_VERSION).toBe(">=0.3.0,<1.0.0");
+		expect(SUPPORTED_SERVER_VERSION).toBe(">=0.8.0,<1.0.0");
 	});
 
 	it("exports proto version", () => {

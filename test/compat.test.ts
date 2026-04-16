@@ -104,8 +104,8 @@ describe("checkVersionCompatible", () => {
 	});
 
 	it("uses default SUPPORTED_SERVER_VERSION when range is omitted", () => {
-		// 0.5.0 should be in >=0.3.0,<1.0.0
-		expect(() => checkVersionCompatible("0.5.0")).not.toThrow();
+		// 0.8.0 should be in >=0.8.0,<1.0.0
+		expect(() => checkVersionCompatible("0.8.0")).not.toThrow();
 	});
 
 	it("includes version info in error message", () => {
