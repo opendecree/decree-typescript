@@ -22,12 +22,12 @@ import {
 	type SetFieldsResponse,
 } from "./generated/centralconfig/v1/config_service.js";
 import {
-	type GetServerVersionRequest,
-	type GetServerVersionResponse,
-	VersionServiceClient as GrpcVersionServiceClient,
-} from "./generated/centralconfig/v1/version_service.js";
+	type GetServerInfoRequest,
+	type GetServerInfoResponse,
+	ServerServiceClient as GrpcServerServiceClient,
+} from "./generated/centralconfig/v1/server_service.js";
 import { withRetry } from "./retry.js";
-import type { ClientOptions, RetryConfig, ServerVersion } from "./types.js";
+import type { ClientOptions, RetryConfig, ServerInfo } from "./types.js";
 import { ConfigWatcher } from "./watcher.js";
 
 /**
@@ -54,11 +54,11 @@ interface GetOptions {
  */
 export class ConfigClient {
 	private readonly configStub: InstanceType<typeof GrpcConfigServiceClient>;
-	private readonly versionStub: InstanceType<typeof GrpcVersionServiceClient>;
+	private readonly serverStub: InstanceType<typeof GrpcServerServiceClient>;
 	private readonly metadata: Metadata;
 	private readonly timeout: number;
 	private readonly retryConfig: RetryConfig | false;
-	private serverVersionPromise: Promise<ServerVersion> | undefined;
+	private serverInfoPromise: Promise<ServerInfo> | undefined;
 
 	constructor(target: string, options?: ClientOptions) {
 		const opts = options ?? {};
@@ -81,30 +81,38 @@ export class ConfigClient {
 
 		const creds = createChannel(opts);
 		this.configStub = new GrpcConfigServiceClient(target, creds);
-		this.versionStub = new GrpcVersionServiceClient(target, creds);
+		this.serverStub = new GrpcServerServiceClient(target, creds);
+	}
+
+	/**
+	 * The server's info (version, commit, features), fetched once and cached.
+	 * Returns a promise that resolves to the ServerInfo.
+	 */
+	get serverInfo(): Promise<ServerInfo> {
+		if (this.serverInfoPromise === undefined) {
+			this.serverInfoPromise = this.fetchServerInfo();
+		}
+		return this.serverInfoPromise;
 	}
 
 	/**
 	 * The server's version, fetched once and cached.
-	 * Returns a promise that resolves to the ServerVersion.
+	 * @deprecated Use serverInfo instead.
 	 */
-	get serverVersion(): Promise<ServerVersion> {
-		if (this.serverVersionPromise === undefined) {
-			this.serverVersionPromise = this.fetchServerVersion();
-		}
-		return this.serverVersionPromise;
+	get serverVersion(): Promise<ServerInfo> {
+		return this.serverInfo;
 	}
 
 	/**
 	 * Check that the server version is compatible with this SDK.
-	 * Fetches the server version (cached) and compares against SUPPORTED_SERVER_VERSION.
+	 * Fetches the server info (cached) and compares against SUPPORTED_SERVER_VERSION.
 	 *
 	 * @throws IncompatibleServerError if the server is outside the supported range.
 	 * @throws UnavailableError if the server is unreachable.
 	 */
 	async checkCompatibility(): Promise<void> {
-		const sv = await this.serverVersion;
-		checkVersionCompatible(sv.version);
+		const si = await this.serverInfo;
+		checkVersionCompatible(si.version);
 	}
 
 	/**
@@ -284,7 +292,7 @@ export class ConfigClient {
 	 */
 	close(): void {
 		this.configStub.close();
-		this.versionStub.close();
+		this.serverStub.close();
 	}
 
 	/**
@@ -296,10 +304,10 @@ export class ConfigClient {
 
 	// --- Private helpers ---
 
-	private async fetchServerVersion(): Promise<ServerVersion> {
-		const fn = () => this.callGetServerVersion({});
+	private async fetchServerInfo(): Promise<ServerInfo> {
+		const fn = () => this.callGetServerInfo({});
 		const resp = await this.withRetryAndMap(fn);
-		return { version: resp.version, commit: resp.commit };
+		return { version: resp.version, commit: resp.commit, features: resp.features };
 	}
 
 	private async withRetryAndMap<T>(fn: () => Promise<T>): Promise<T> {
@@ -369,15 +377,13 @@ export class ConfigClient {
 		});
 	}
 
-	private callGetServerVersion(
-		request: GetServerVersionRequest,
-	): Promise<GetServerVersionResponse> {
+	private callGetServerInfo(request: GetServerInfoRequest): Promise<GetServerInfoResponse> {
 		return new Promise((resolve, reject) => {
-			this.versionStub.getServerVersion(
+			this.serverStub.getServerInfo(
 				request,
 				this.metadata,
 				{ deadline: Date.now() + this.timeout },
-				(err: ServiceError | null, resp: GetServerVersionResponse) => {
+				(err: ServiceError | null, resp: GetServerInfoResponse) => {
 					if (err) reject(err);
 					else resolve(resp);
 				},
