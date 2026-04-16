@@ -31,4 +31,13 @@ jobs:
         run: npm install -g npm@latest
       - name: Remove temp npmrc so npm uses OIDC
         run: rm -f "$NPM_CONFIG_USERCONFIG"
-      - run: npm publish --provenance --access public
+      - name: Determine npm tag
+        id: tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if echo "$VERSION" | grep -qE 'alpha|beta|rc'; then
+            echo "tag=alpha" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+      - run: npm publish --provenance --access public --tag ${{ steps.tag.outputs.tag }}
