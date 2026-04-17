@@ -2,6 +2,11 @@
 #
 # Jobs: lint, typecheck, test (matrix: Node 20/22/24), examples → check (alls-green gate)
 # The check job aggregates all results for branch protection.
+#
+# The first job defines YAML anchors (&checkout, &setup-node-22, &install)
+# on its setup steps; subsequent jobs alias them to avoid repetition.
+# The test job uses its own setup-node step because the matrix node-version
+# varies per run.
 
 name: CI
 
@@ -17,20 +22,20 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - &checkout
+        name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - name: Set up Node.js
+      - &setup-node-22
+        name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
-
-      - name: Install dependencies
+      - &install
+        name: Install dependencies
         run: npm ci
-
       - name: Run biome lint
         run: npm run lint
 
@@ -38,20 +43,9 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
+      - *checkout
+      - *setup-node-22
+      - *install
       - name: Run tsc
         run: npm run typecheck
 
@@ -63,20 +57,13 @@ jobs:
       matrix:
         node-version: ["20", "22", "24"]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
+      - *checkout
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
+      - *install
       - name: Run tests with coverage
         run: npm run test:coverage
 
@@ -84,23 +71,12 @@ jobs:
     name: Examples
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
+      - *checkout
+      - *setup-node-22
       - name: Install SDK dependencies
         run: npm ci
-
       - name: Install example dependencies
         run: cd examples && npm install
-
       - name: Typecheck examples
         run: cd examples && npx tsc --noEmit
 
