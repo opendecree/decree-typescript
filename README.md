@@ -102,6 +102,10 @@ Runnable examples in the [`examples/`](examples/) directory:
 - Node.js 20+
 - A running OpenDecree server (v0.3.0+)
 
+## Questions?
+
+Head to [OpenDecree Discussions](https://github.com/orgs/opendecree/discussions) -- our community hub covers all OpenDecree repos.
+
 ## License
 
 Apache License 2.0 -- see [LICENSE](LICENSE).
