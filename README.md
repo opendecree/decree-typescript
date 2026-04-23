@@ -4,7 +4,6 @@
 [![npm](https://img.shields.io/npm/v/@opendecree/sdk)](https://www.npmjs.com/package/@opendecree/sdk)
 [![Node](https://img.shields.io/node/v/@opendecree/sdk)](https://www.npmjs.com/package/@opendecree/sdk)
 [![Downloads](https://img.shields.io/npm/dm/@opendecree/sdk)](https://www.npmjs.com/package/@opendecree/sdk)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/opendecree/decree-typescript)
 [![License](https://img.shields.io/github/license/opendecree/decree-typescript)](LICENSE)
 [![Project Status: WIP](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
