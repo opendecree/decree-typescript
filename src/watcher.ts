@@ -15,10 +15,10 @@ import { DecreeError, mapGrpcError } from "./errors.js";
 import type {
 	GetConfigRequest,
 	GetConfigResponse,
+	ConfigServiceClient as GrpcConfigServiceClient,
 	SubscribeRequest,
 	SubscribeResponse,
 } from "./generated/centralconfig/v1/config_service.js";
-import type { ConfigServiceClient as GrpcConfigServiceClient } from "./generated/centralconfig/v1/config_service.js";
 import type { Change } from "./types.js";
 
 /** gRPC status codes that trigger automatic reconnection. */

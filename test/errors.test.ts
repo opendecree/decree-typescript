@@ -7,11 +7,11 @@ import {
 	IncompatibleServerError,
 	InvalidArgumentError,
 	LockedError,
+	mapGrpcError,
 	NotFoundError,
 	PermissionDeniedError,
 	TypeMismatchError,
 	UnavailableError,
-	mapGrpcError,
 } from "../src/errors.js";
 
 function makeServiceError(code: number, details: string): ServiceError {

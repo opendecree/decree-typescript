@@ -1,5 +1,5 @@
 import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
-import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { ConfigClient } from "../src/client.js";
 import {
 	DecreeError,
