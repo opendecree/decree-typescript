@@ -9,7 +9,7 @@ import { Metadata, type ServiceError } from "@grpc/grpc-js";
 import { createChannel } from "./channel.js";
 import { checkVersionCompatible } from "./compat.js";
 import { type Converter, convertValue, typedValueToString } from "./convert.js";
-import { NotFoundError, mapGrpcError } from "./errors.js";
+import { mapGrpcError, NotFoundError } from "./errors.js";
 import {
 	type GetConfigRequest,
 	type GetConfigResponse,

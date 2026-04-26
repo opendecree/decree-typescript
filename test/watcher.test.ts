@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
-import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { DecreeError } from "../src/errors.js";
 import type { Change } from "../src/types.js";
 import { ConfigWatcher, WatchedField } from "../src/watcher.js";
