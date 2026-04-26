@@ -51,9 +51,17 @@ describe("ConfigClient", () => {
 			close: vi.fn(),
 		};
 
-		// Make the constructor return our stubs.
-		(configMod.ConfigServiceClient as unknown as MockInstance).mockReturnValue(configStub);
-		(serverMod.ServerServiceClient as unknown as MockInstance).mockReturnValue(serverStub);
+		// Make the constructor return our stubs (vitest 4 requires a constructable function for `new`).
+		(configMod.ConfigServiceClient as unknown as MockInstance).mockImplementation(function (
+			this: unknown,
+		) {
+			return configStub;
+		});
+		(serverMod.ServerServiceClient as unknown as MockInstance).mockImplementation(function (
+			this: unknown,
+		) {
+			return serverStub;
+		});
 
 		client = new ConfigClient("localhost:9090", {
 			subject: "testuser",
