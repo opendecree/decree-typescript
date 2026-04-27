@@ -357,7 +357,84 @@ export interface Schema {
     | Date
     | undefined;
   /** Optional schema metadata: ownership, contact, labels. */
-  info: SchemaInfo | undefined;
+  info:
+    | SchemaInfo
+    | undefined;
+  /**
+   * Cross-field "B required when A present" rules. Each entry declares one
+   * trigger field whose presence (non-null value) makes a list of dependent
+   * field paths required (also non-null). Equivalent to JSON Schema 2020-12
+   * dependentRequired, scoped to schema-level cross-field requirement.
+   * Lint-checked at ImportSchema time (every path must reference a real
+   * field; trigger may not appear in its own dependents). Enforced at every
+   * config write against the post-merge snapshot.
+   */
+  dependentRequired: DependentRequiredEntry[];
+  /**
+   * Cross-field rule expressions reserved for future Common Expression
+   * Language (CEL) evaluation. Stored on the schema and round-tripped
+   * through ImportSchema/GetSchema; the runtime engine ships separately
+   * (see issue #76). Reserving the key in v0.1.0 of the schema spec
+   * avoids a breaking meta-schema change later.
+   */
+  validations: ValidationRule[];
+}
+
+/**
+ * DependentRequiredEntry encodes one cross-field requirement: when the
+ * trigger field has a non-null value, every dependent field path must also
+ * have a non-null value. This is the proto wire form of JSON Schema 2020-12
+ * dependentRequired, which uses a `map<path, list<path>>` shape — proto
+ * maps cannot hold repeated values directly, so we use a repeated list of
+ * entries.
+ */
+export interface DependentRequiredEntry {
+  /** Field path whose presence triggers the requirement. */
+  triggerField: string;
+  /** Field paths that must be present when the trigger has a non-null value. */
+  dependentFields: string[];
+}
+
+/**
+ * ValidationRule encodes one cross-field rule expressed in Common
+ * Expression Language (CEL). Reserved in v0.1.0 of the schema spec — the
+ * parser accepts and persists rules, but the engine that compiles and
+ * evaluates them ships separately (see issue #76 / .agents/context/cel-validation.md).
+ *
+ * Rules are scoped to a path prefix: an empty path means a schema-wide
+ * rule; a non-empty path anchors the rule to a group for documentation
+ * and UI grouping (the binding namespace itself always exposes every
+ * field via `self`, regardless of path).
+ */
+export interface ValidationRule {
+  /**
+   * Optional path prefix scoping the rule to a group of fields. Empty
+   * string means the rule applies at schema scope.
+   */
+  path: string;
+  /**
+   * The CEL expression source. Lint at ImportSchema in v0.1.0 only checks
+   * that the string is non-empty; CEL compilation happens in Phase 2 once
+   * the engine ships.
+   */
+  rule: string;
+  /**
+   * Human-readable failure message shown to clients when the rule
+   * rejects a write. Required.
+   */
+  message: string;
+  /**
+   * Optional severity hint. Reserved values: "error" (default — write
+   * rejected) and "warning" (write accepted, surfaced for UI). v0.1.0
+   * only validates the value is empty or one of the reserved set; the
+   * warning path is not yet enforced.
+   */
+  severity: string;
+  /**
+   * Optional machine-readable failure code for SDK consumers that want
+   * to branch on rule outcome without parsing the message text.
+   */
+  reason: string;
 }
 
 /**
@@ -1722,6 +1799,8 @@ function createBaseSchema(): Schema {
     fields: [],
     createdAt: undefined,
     info: undefined,
+    dependentRequired: [],
+    validations: [],
   };
 }
 
@@ -1759,6 +1838,12 @@ export const Schema: MessageFns<Schema> = {
     }
     if (message.info !== undefined) {
       SchemaInfo.encode(message.info, writer.uint32(90).fork()).join();
+    }
+    for (const v of message.dependentRequired) {
+      DependentRequiredEntry.encode(v!, writer.uint32(98).fork()).join();
+    }
+    for (const v of message.validations) {
+      ValidationRule.encode(v!, writer.uint32(106).fork()).join();
     }
     return writer;
   },
@@ -1858,6 +1943,22 @@ export const Schema: MessageFns<Schema> = {
           message.info = SchemaInfo.decode(reader, reader.uint32());
           continue;
         }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.dependentRequired.push(DependentRequiredEntry.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.validations.push(ValidationRule.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1892,6 +1993,14 @@ export const Schema: MessageFns<Schema> = {
         ? fromJsonTimestamp(object.created_at)
         : undefined,
       info: isSet(object.info) ? SchemaInfo.fromJSON(object.info) : undefined,
+      dependentRequired: globalThis.Array.isArray(object?.dependentRequired)
+        ? object.dependentRequired.map((e: any) => DependentRequiredEntry.fromJSON(e))
+        : globalThis.Array.isArray(object?.dependent_required)
+        ? object.dependent_required.map((e: any) => DependentRequiredEntry.fromJSON(e))
+        : [],
+      validations: globalThis.Array.isArray(object?.validations)
+        ? object.validations.map((e: any) => ValidationRule.fromJSON(e))
+        : [],
     };
   },
 
@@ -1930,6 +2039,12 @@ export const Schema: MessageFns<Schema> = {
     if (message.info !== undefined) {
       obj.info = SchemaInfo.toJSON(message.info);
     }
+    if (message.dependentRequired?.length) {
+      obj.dependentRequired = message.dependentRequired.map((e) => DependentRequiredEntry.toJSON(e));
+    }
+    if (message.validations?.length) {
+      obj.validations = message.validations.map((e) => ValidationRule.toJSON(e));
+    }
     return obj;
   },
 
@@ -1951,6 +2066,216 @@ export const Schema: MessageFns<Schema> = {
     message.info = (object.info !== undefined && object.info !== null)
       ? SchemaInfo.fromPartial(object.info)
       : undefined;
+    message.dependentRequired = object.dependentRequired?.map((e) => DependentRequiredEntry.fromPartial(e)) || [];
+    message.validations = object.validations?.map((e) => ValidationRule.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseDependentRequiredEntry(): DependentRequiredEntry {
+  return { triggerField: "", dependentFields: [] };
+}
+
+export const DependentRequiredEntry: MessageFns<DependentRequiredEntry> = {
+  encode(message: DependentRequiredEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.triggerField !== "") {
+      writer.uint32(10).string(message.triggerField);
+    }
+    for (const v of message.dependentFields) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DependentRequiredEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDependentRequiredEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.triggerField = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.dependentFields.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DependentRequiredEntry {
+    return {
+      triggerField: isSet(object.triggerField)
+        ? globalThis.String(object.triggerField)
+        : isSet(object.trigger_field)
+        ? globalThis.String(object.trigger_field)
+        : "",
+      dependentFields: globalThis.Array.isArray(object?.dependentFields)
+        ? object.dependentFields.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.dependent_fields)
+        ? object.dependent_fields.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: DependentRequiredEntry): unknown {
+    const obj: any = {};
+    if (message.triggerField !== "") {
+      obj.triggerField = message.triggerField;
+    }
+    if (message.dependentFields?.length) {
+      obj.dependentFields = message.dependentFields;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<DependentRequiredEntry>): DependentRequiredEntry {
+    return DependentRequiredEntry.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<DependentRequiredEntry>): DependentRequiredEntry {
+    const message = createBaseDependentRequiredEntry();
+    message.triggerField = object.triggerField ?? "";
+    message.dependentFields = object.dependentFields?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseValidationRule(): ValidationRule {
+  return { path: "", rule: "", message: "", severity: "", reason: "" };
+}
+
+export const ValidationRule: MessageFns<ValidationRule> = {
+  encode(message: ValidationRule, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.path !== "") {
+      writer.uint32(10).string(message.path);
+    }
+    if (message.rule !== "") {
+      writer.uint32(18).string(message.rule);
+    }
+    if (message.message !== "") {
+      writer.uint32(26).string(message.message);
+    }
+    if (message.severity !== "") {
+      writer.uint32(34).string(message.severity);
+    }
+    if (message.reason !== "") {
+      writer.uint32(42).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidationRule {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidationRule();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.path = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.rule = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.severity = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidationRule {
+    return {
+      path: isSet(object.path) ? globalThis.String(object.path) : "",
+      rule: isSet(object.rule) ? globalThis.String(object.rule) : "",
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+      severity: isSet(object.severity) ? globalThis.String(object.severity) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: ValidationRule): unknown {
+    const obj: any = {};
+    if (message.path !== "") {
+      obj.path = message.path;
+    }
+    if (message.rule !== "") {
+      obj.rule = message.rule;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    if (message.severity !== "") {
+      obj.severity = message.severity;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<ValidationRule>): ValidationRule {
+    return ValidationRule.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<ValidationRule>): ValidationRule {
+    const message = createBaseValidationRule();
+    message.path = object.path ?? "";
+    message.rule = object.rule ?? "";
+    message.message = object.message ?? "";
+    message.severity = object.severity ?? "";
+    message.reason = object.reason ?? "";
     return message;
   },
 };

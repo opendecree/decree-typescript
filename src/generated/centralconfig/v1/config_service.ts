@@ -282,7 +282,15 @@ export interface ExportConfigRequest {
   /** Tenant ID (UUID). */
   tenantId: string;
   /** Config version to export. If omitted, exports the latest version. */
-  version?: number | undefined;
+  version?:
+    | number
+    | undefined;
+  /**
+   * Config-format spec version to emit (e.g. "v1"). When omitted, defaults
+   * to the highest version the server supports. The server returns
+   * InvalidArgument if the requested version is not registered.
+   */
+  specVersion?: string | undefined;
 }
 
 export interface ExportConfigResponse {
@@ -1982,7 +1990,7 @@ export const SubscribeResponse: MessageFns<SubscribeResponse> = {
 };
 
 function createBaseExportConfigRequest(): ExportConfigRequest {
-  return { tenantId: "", version: undefined };
+  return { tenantId: "", version: undefined, specVersion: undefined };
 }
 
 export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
@@ -1992,6 +2000,9 @@ export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
     }
     if (message.version !== undefined) {
       writer.uint32(16).int32(message.version);
+    }
+    if (message.specVersion !== undefined) {
+      writer.uint32(26).string(message.specVersion);
     }
     return writer;
   },
@@ -2019,6 +2030,14 @@ export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
           message.version = reader.int32();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.specVersion = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2036,6 +2055,11 @@ export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
         ? globalThis.String(object.tenant_id)
         : "",
       version: isSet(object.version) ? globalThis.Number(object.version) : undefined,
+      specVersion: isSet(object.specVersion)
+        ? globalThis.String(object.specVersion)
+        : isSet(object.spec_version)
+        ? globalThis.String(object.spec_version)
+        : undefined,
     };
   },
 
@@ -2047,6 +2071,9 @@ export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
     if (message.version !== undefined) {
       obj.version = Math.round(message.version);
     }
+    if (message.specVersion !== undefined) {
+      obj.specVersion = message.specVersion;
+    }
     return obj;
   },
 
@@ -2057,6 +2084,7 @@ export const ExportConfigRequest: MessageFns<ExportConfigRequest> = {
     const message = createBaseExportConfigRequest();
     message.tenantId = object.tenantId ?? "";
     message.version = object.version ?? undefined;
+    message.specVersion = object.specVersion ?? undefined;
     return message;
   },
 };
