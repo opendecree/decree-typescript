@@ -221,12 +221,20 @@ export interface ExportSchemaRequest {
   /** Schema ID (UUID). */
   id: string;
   /** Schema version to export. If omitted, exports the latest version. */
-  version?: number | undefined;
+  version?:
+    | number
+    | undefined;
+  /**
+   * Schema-format spec version to emit (e.g. "v1"). When omitted, defaults
+   * to the highest version the server supports. The server returns
+   * InvalidArgument if the requested version is not registered.
+   */
+  specVersion?: string | undefined;
 }
 
 export interface ExportSchemaResponse {
   /**
-   * YAML-encoded schema (syntax v1). Includes schema name, description,
+   * YAML-encoded schema (spec_version v1). Includes schema name, description,
    * version, and all field definitions with OAS-style constraint naming.
    * Server-generated fields (id, checksum, published, created_at) are excluded.
    */
@@ -235,7 +243,7 @@ export interface ExportSchemaResponse {
 
 export interface ImportSchemaRequest {
   /**
-   * YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.
+   * YAML-encoded schema (spec_version v1). Must include `spec_version`, `name`, and `fields`.
    *
    * Import uses full-replace semantics:
    * - If no schema with this name exists: creates a new schema with version 1.
@@ -2262,7 +2270,7 @@ export const ListFieldLocksResponse: MessageFns<ListFieldLocksResponse> = {
 };
 
 function createBaseExportSchemaRequest(): ExportSchemaRequest {
-  return { id: "", version: undefined };
+  return { id: "", version: undefined, specVersion: undefined };
 }
 
 export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
@@ -2272,6 +2280,9 @@ export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
     }
     if (message.version !== undefined) {
       writer.uint32(16).int32(message.version);
+    }
+    if (message.specVersion !== undefined) {
+      writer.uint32(26).string(message.specVersion);
     }
     return writer;
   },
@@ -2299,6 +2310,14 @@ export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
           message.version = reader.int32();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.specVersion = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2312,6 +2331,11 @@ export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
       version: isSet(object.version) ? globalThis.Number(object.version) : undefined,
+      specVersion: isSet(object.specVersion)
+        ? globalThis.String(object.specVersion)
+        : isSet(object.spec_version)
+        ? globalThis.String(object.spec_version)
+        : undefined,
     };
   },
 
@@ -2323,6 +2347,9 @@ export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
     if (message.version !== undefined) {
       obj.version = Math.round(message.version);
     }
+    if (message.specVersion !== undefined) {
+      obj.specVersion = message.specVersion;
+    }
     return obj;
   },
 
@@ -2333,6 +2360,7 @@ export const ExportSchemaRequest: MessageFns<ExportSchemaRequest> = {
     const message = createBaseExportSchemaRequest();
     message.id = object.id ?? "";
     message.version = object.version ?? undefined;
+    message.specVersion = object.specVersion ?? undefined;
     return message;
   },
 };
