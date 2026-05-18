@@ -6,6 +6,7 @@
 [![Downloads](https://img.shields.io/npm/dm/@opendecree/sdk)](https://www.npmjs.com/package/@opendecree/sdk)
 [![License](https://img.shields.io/github/license/opendecree/decree-typescript)](LICENSE)
 [![Project Status: WIP](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+[![codecov](https://codecov.io/gh/opendecree/decree-typescript/graph/badge.svg)](https://codecov.io/gh/opendecree/decree-typescript)
 
 TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-driven configuration management.
 

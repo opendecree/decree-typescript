@@ -67,6 +67,13 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: Upload coverage to Codecov
+        # codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
+        with:
+          files: coverage/coverage-final.json
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   examples:
     name: Examples
     runs-on: ubuntu-latest
