@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `ClientOptions.insecure` now defaults to `false` (TLS). Previously defaulted to `true` (plaintext). Connections to TLS endpoints now work correctly out of the box; plaintext requires explicit `insecure: true`.
+
+### Added
+
+- Warning logged when `insecure: true` is set alongside a bearer token, since the token would be transmitted in cleartext.
+
 ## [0.2.0-alpha.1] - 2026-04-16
 
 ### Changed

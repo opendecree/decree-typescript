@@ -59,7 +59,7 @@ export interface ClientOptions {
 	readonly tenantId?: string;
 	/** Bearer token. When set, metadata headers are not sent. */
 	readonly token?: string;
-	/** Use plaintext (no TLS). Default: true. */
+	/** Use plaintext (no TLS). Default: false. Set to true only for local/dev servers without TLS. */
 	readonly insecure?: boolean;
 	/** Default per-RPC timeout in milliseconds. Default: 10000. */
 	readonly timeout?: number;
