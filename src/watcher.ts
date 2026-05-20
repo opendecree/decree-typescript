@@ -27,6 +27,9 @@ const RETRYABLE_CODES = new Set([status.UNAVAILABLE, status.INTERNAL]);
 /** Maximum reconnect backoff in milliseconds. */
 const MAX_RECONNECT_BACKOFF = 30_000;
 
+/** Default maximum number of unread changes buffered per WatchedField before oldest are dropped. */
+const DEFAULT_QUEUE_SIZE = 1024;
+
 /** Initial reconnect backoff in milliseconds. */
 const INITIAL_RECONNECT_BACKOFF = 500;
 
@@ -39,6 +42,12 @@ const RECONNECT_MULTIPLIER = 2;
 interface FieldOptions<T> {
 	/** Default value returned when the field has no value on the server. */
 	readonly default: T;
+	/**
+	 * Maximum number of unread changes buffered for async iteration.
+	 * When the queue is full, the oldest entry is dropped and `droppedChanges` is incremented.
+	 * Default: 1024.
+	 */
+	readonly queueSize?: number;
 }
 
 /**
@@ -78,6 +87,8 @@ export class WatchedField<T> extends EventEmitter {
 	private stopped = false;
 	private pendingResolve: ((value: IteratorResult<Change>) => void) | null = null;
 	private readonly changeQueue: Change[] = [];
+	private readonly maxQueueSize: number;
+	private _droppedChanges = 0;
 
 	/** @internal */
 	constructor(path: string, converter: Converter, options: FieldOptions<T>) {
@@ -86,6 +97,17 @@ export class WatchedField<T> extends EventEmitter {
 		this.converter = converter;
 		this.defaultValue = options.default;
 		this.currentValue = options.default;
+		this.maxQueueSize = options.queueSize ?? DEFAULT_QUEUE_SIZE;
+	}
+
+	/**
+	 * Number of changes dropped because the queue was full.
+	 *
+	 * Increments whenever a slow consumer causes a buffered change to be evicted.
+	 * Reset to zero only by creating a new WatchedField instance.
+	 */
+	get droppedChanges(): number {
+		return this._droppedChanges;
 	}
 
 	/**
@@ -178,6 +200,10 @@ export class WatchedField<T> extends EventEmitter {
 			this.pendingResolve = null;
 			resolve({ done: false, value: change });
 		} else {
+			if (this.changeQueue.length >= this.maxQueueSize) {
+				this.changeQueue.shift();
+				this._droppedChanges++;
+			}
 			this.changeQueue.push(change);
 		}
 	}

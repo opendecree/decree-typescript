@@ -226,6 +226,62 @@ describe("WatchedField", () => {
 			await iterPromise;
 			expect(changes).toHaveLength(2);
 		});
+
+		it("drops oldest change when queue is full", () => {
+			const field = new WatchedField("payments.fee", Number, { default: 0.01, queueSize: 2 });
+			field._loadInitial("0.01");
+
+			const makeChange = (from: string, to: string, v: number): Change => ({
+				fieldPath: "payments.fee",
+				oldValue: from,
+				newValue: to,
+				version: v,
+				changedBy: "admin",
+			});
+
+			field._update("0.02", makeChange("0.01", "0.02", 2));
+			field._update("0.03", makeChange("0.02", "0.03", 3));
+			// Queue is now full (size 2): [v2, v3].
+			expect(field.droppedChanges).toBe(0);
+
+			field._update("0.04", makeChange("0.03", "0.04", 4));
+			// v2 dropped; queue: [v3, v4].
+			expect(field.droppedChanges).toBe(1);
+
+			field._update("0.05", makeChange("0.04", "0.05", 5));
+			// v3 dropped; queue: [v4, v5].
+			expect(field.droppedChanges).toBe(2);
+		});
+
+		it("droppedChanges is zero when consumer keeps up", async () => {
+			const field = new WatchedField("payments.fee", Number, { default: 0.01, queueSize: 4 });
+			field._loadInitial("0.01");
+
+			const changes: Change[] = [];
+			const iterPromise = (async () => {
+				for await (const change of field) {
+					changes.push(change);
+					if (changes.length === 3) break;
+				}
+			})();
+
+			await new Promise((r) => setTimeout(r, 10));
+
+			const makeChange = (from: string, to: string, v: number): Change => ({
+				fieldPath: "payments.fee",
+				oldValue: from,
+				newValue: to,
+				version: v,
+				changedBy: "admin",
+			});
+			field._update("0.02", makeChange("0.01", "0.02", 2));
+			field._update("0.03", makeChange("0.02", "0.03", 3));
+			field._update("0.04", makeChange("0.03", "0.04", 4));
+
+			await iterPromise;
+			expect(changes).toHaveLength(3);
+			expect(field.droppedChanges).toBe(0);
+		});
 	});
 });
 
