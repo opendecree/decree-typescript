@@ -93,6 +93,22 @@ certificate store.
 
 The SDK retries transient gRPC errors with exponential backoff and jitter.
 
+### Read vs write retry defaults
+
+Read operations (`get`, `getAll`) retry on `UNAVAILABLE`, `DEADLINE_EXCEEDED`, and `RESOURCE_EXHAUSTED`. These are safe to retry because reads have no side effects.
+
+Write operations (`set`, `setMany`, `setNull`) retry only on `UNAVAILABLE` by default. `DEADLINE_EXCEEDED` is excluded because the server may have already applied the write — retrying without a guarantee of idempotency can cause duplicate mutations.
+
+To enable `DEADLINE_EXCEEDED` retries for a write, pass an `idempotencyKey`. This signals that the caller has ensured the write is safe to repeat (e.g. the value is the same as what the server would have written):
+
+```typescript
+await client.set('tenant-id', 'payments.fee', '0.05', { idempotencyKey: 'set-fee-2026-05-20' });
+await client.setMany('tenant-id', { 'payments.fee': '0.05' }, { idempotencyKey: 'batch-1' });
+await client.setNull('tenant-id', 'payments.fee', { idempotencyKey: 'clear-fee' });
+```
+
+If you set `retryableCodes` in `ClientOptions.retry`, that list overrides both read and write defaults for all operations.
+
 ### RetryConfig
 
 | Option | Type | Default | Description |
@@ -101,7 +117,7 @@ The SDK retries transient gRPC errors with exponential backoff and jitter.
 | `initialBackoff` | `number` | `100` | Initial backoff in milliseconds |
 | `maxBackoff` | `number` | `5000` | Maximum backoff in milliseconds |
 | `multiplier` | `number` | `2` | Backoff multiplier between attempts |
-| `retryableCodes` | `GrpcStatus[]` | `[UNAVAILABLE, DEADLINE_EXCEEDED]` | gRPC codes that trigger a retry |
+| `retryableCodes` | `GrpcStatus[]` | see above | gRPC codes that trigger a retry (overrides read/write split) |
 
 ### Examples
 

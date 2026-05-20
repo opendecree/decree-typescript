@@ -26,7 +26,12 @@ import {
 	type GetServerInfoResponse,
 	ServerServiceClient as GrpcServerServiceClient,
 } from "./generated/centralconfig/v1/server_service.js";
-import { withRetry } from "./retry.js";
+import {
+	READ_RETRYABLE_CODES,
+	WRITE_IDEMPOTENT_RETRYABLE_CODES,
+	WRITE_RETRYABLE_CODES,
+	withRetry,
+} from "./retry.js";
 import type { ClientOptions, RetryConfig, ServerInfo } from "./types.js";
 import { ConfigWatcher } from "./watcher.js";
 
@@ -232,7 +237,7 @@ export class ConfigClient {
 		tenantId: string,
 		fieldPath: string,
 		value: string,
-		options?: { timeout?: number },
+		options?: { timeout?: number; idempotencyKey?: string },
 	): Promise<void> {
 		const fn = async () => {
 			await this.callSetField(
@@ -241,19 +246,22 @@ export class ConfigClient {
 			);
 		};
 
-		return this.withRetryAndMap(fn);
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
+		return this.withRetryAndMap(fn, codes);
 	}
 
 	/**
 	 * Atomically set multiple config values.
 	 *
 	 * @param values - Record mapping field paths to string values.
-	 * @param options - Optional description for the audit log.
+	 * @param options - Optional description for the audit log and idempotency key for safe DEADLINE_EXCEEDED retries.
 	 */
 	async setMany(
 		tenantId: string,
 		values: Record<string, string>,
-		options?: { description?: string; timeout?: number },
+		options?: { description?: string; timeout?: number; idempotencyKey?: string },
 	): Promise<void> {
 		const fn = async () => {
 			const updates = Object.entries(values).map(([fieldPath, v]) => ({
@@ -266,7 +274,10 @@ export class ConfigClient {
 			);
 		};
 
-		return this.withRetryAndMap(fn);
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
+		return this.withRetryAndMap(fn, codes);
 	}
 
 	/**
@@ -275,13 +286,16 @@ export class ConfigClient {
 	async setNull(
 		tenantId: string,
 		fieldPath: string,
-		options?: { timeout?: number },
+		options?: { timeout?: number; idempotencyKey?: string },
 	): Promise<void> {
 		const fn = async () => {
 			await this.callSetField({ tenantId, fieldPath, value: undefined }, options?.timeout);
 		};
 
-		return this.withRetryAndMap(fn);
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
+		return this.withRetryAndMap(fn, codes);
 	}
 
 	/**
@@ -329,9 +343,16 @@ export class ConfigClient {
 		return { version: resp.version, commit: resp.commit, features: resp.features };
 	}
 
-	private async withRetryAndMap<T>(fn: () => Promise<T>): Promise<T> {
+	private async withRetryAndMap<T>(
+		fn: () => Promise<T>,
+		defaultCodes: readonly number[] = READ_RETRYABLE_CODES,
+	): Promise<T> {
+		let config: RetryConfig | false = this.retryConfig;
+		if (config !== false && !config.retryableCodes) {
+			config = { ...config, retryableCodes: [...defaultCodes] };
+		}
 		try {
-			return await withRetry(this.retryConfig, fn);
+			return await withRetry(config, fn);
 		} catch (err) {
 			if (isServiceError(err)) {
 				throw mapGrpcError(err);
