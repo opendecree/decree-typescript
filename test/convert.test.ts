@@ -38,6 +38,30 @@ describe("convertValue", () => {
 		it("throws TypeMismatchError for empty string", () => {
 			expect(() => convertValue("", Number)).toThrow(TypeMismatchError);
 		});
+
+		it("accepts Number.MAX_SAFE_INTEGER", () => {
+			expect(convertValue(String(Number.MAX_SAFE_INTEGER), Number)).toBe(Number.MAX_SAFE_INTEGER);
+		});
+
+		it("accepts Number.MIN_SAFE_INTEGER", () => {
+			expect(convertValue(String(Number.MIN_SAFE_INTEGER), Number)).toBe(Number.MIN_SAFE_INTEGER);
+		});
+
+		it("throws TypeMismatchError for integer above MAX_SAFE_INTEGER", () => {
+			expect(() => convertValue(String(Number.MAX_SAFE_INTEGER + 1), Number)).toThrow(
+				TypeMismatchError,
+			);
+		});
+
+		it("throws TypeMismatchError for integer below MIN_SAFE_INTEGER", () => {
+			expect(() => convertValue(String(Number.MIN_SAFE_INTEGER - 1), Number)).toThrow(
+				TypeMismatchError,
+			);
+		});
+
+		it("does not throw for large float (non-integer) above MAX_SAFE_INTEGER", () => {
+			expect(convertValue("1e20", Number)).toBe(1e20);
+		});
 	});
 
 	describe("Boolean converter", () => {

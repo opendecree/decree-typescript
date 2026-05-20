@@ -31,6 +31,12 @@ export function convertValue(raw: string, type: Converter): unknown {
 		if (globalThis.Number.isNaN(n)) {
 			throw new TypeMismatchError(`cannot convert ${JSON.stringify(raw)} to number`);
 		}
+		// Integer strings that exceed safe integer range lose precision silently — reject them.
+		if (/^-?\d+$/.test(raw.trim()) && !globalThis.Number.isSafeInteger(n)) {
+			throw new TypeMismatchError(
+				`integer ${JSON.stringify(raw)} exceeds safe integer range; use BigInt`,
+			);
+		}
 		return n;
 	}
 	if (type === Boolean) {
