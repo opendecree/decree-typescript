@@ -12,6 +12,10 @@ TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-
 
 > **Alpha** -- This SDK is under active development. APIs and behavior may change without notice between versions.
 
+## Requirements
+
+- Node.js **≥ 20** (ESM-only package — CommonJS is not supported)
+
 ## Install
 
 ```bash
