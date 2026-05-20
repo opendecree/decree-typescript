@@ -31,10 +31,12 @@ import type { ClientOptions, RetryConfig, ServerInfo } from "./types.js";
 import { ConfigWatcher } from "./watcher.js";
 
 /**
- * Options for get() with nullable support.
+ * Options for get() with nullable and per-call timeout support.
  */
 interface GetOptions {
 	readonly nullable?: boolean;
+	/** Per-call timeout in ms. Overrides the client default. */
+	readonly timeout?: number;
 }
 
 /**
@@ -122,9 +124,9 @@ export class ConfigClient {
 	/**
 	 * Get a config value converted to the specified type.
 	 */
-	get(tenantId: string, fieldPath: string, type: typeof Number): Promise<number>;
-	get(tenantId: string, fieldPath: string, type: typeof Boolean): Promise<boolean>;
-	get(tenantId: string, fieldPath: string, type: typeof String): Promise<string>;
+	get(tenantId: string, fieldPath: string, type: typeof Number, options?: { timeout?: number }): Promise<number>;
+	get(tenantId: string, fieldPath: string, type: typeof Boolean, options?: { timeout?: number }): Promise<boolean>;
+	get(tenantId: string, fieldPath: string, type: typeof String, options?: { timeout?: number }): Promise<string>;
 	/**
 	 * Get a config value with nullable support.
 	 * Returns null if the field has no value instead of throwing.
@@ -133,19 +135,19 @@ export class ConfigClient {
 		tenantId: string,
 		fieldPath: string,
 		type: typeof Number,
-		options: { nullable: true },
+		options: { nullable: true; timeout?: number },
 	): Promise<number | null>;
 	get(
 		tenantId: string,
 		fieldPath: string,
 		type: typeof Boolean,
-		options: { nullable: true },
+		options: { nullable: true; timeout?: number },
 	): Promise<boolean | null>;
 	get(
 		tenantId: string,
 		fieldPath: string,
 		type: typeof String,
-		options: { nullable: true },
+		options: { nullable: true; timeout?: number },
 	): Promise<string | null>;
 	get(
 		tenantId: string,
@@ -157,11 +159,10 @@ export class ConfigClient {
 		const nullable = options?.nullable ?? false;
 
 		const fn = async () => {
-			const resp = await this.callGetField({
-				tenantId,
-				fieldPath,
-				includeDescription: false,
-			});
+			const resp = await this.callGetField(
+				{ tenantId, fieldPath, includeDescription: false },
+				options?.timeout,
+			);
 
 			const cv = resp.value;
 			if (cv === undefined || cv.value === undefined) {
@@ -189,12 +190,12 @@ export class ConfigClient {
 	 *
 	 * @returns A record mapping field paths to their string values.
 	 */
-	async getAll(tenantId: string): Promise<Record<string, string>> {
+	async getAll(tenantId: string, options?: { timeout?: number }): Promise<Record<string, string>> {
 		const fn = async () => {
-			const resp = await this.callGetConfig({
-				tenantId,
-				includeDescriptions: false,
-			});
+			const resp = await this.callGetConfig(
+				{ tenantId, includeDescriptions: false },
+				options?.timeout,
+			);
 
 			const result: Record<string, string> = {};
 			if (resp.config) {
@@ -212,13 +213,12 @@ export class ConfigClient {
 	 * Set a config value. The value is sent as a string -- the server
 	 * coerces it to the schema-defined type.
 	 */
-	async set(tenantId: string, fieldPath: string, value: string): Promise<void> {
+	async set(tenantId: string, fieldPath: string, value: string, options?: { timeout?: number }): Promise<void> {
 		const fn = async () => {
-			await this.callSetField({
-				tenantId,
-				fieldPath,
-				value: { stringValue: value },
-			});
+			await this.callSetField(
+				{ tenantId, fieldPath, value: { stringValue: value } },
+				options?.timeout,
+			);
 		};
 
 		return this.withRetryAndMap(fn);
@@ -233,18 +233,17 @@ export class ConfigClient {
 	async setMany(
 		tenantId: string,
 		values: Record<string, string>,
-		options?: { description?: string },
+		options?: { description?: string; timeout?: number },
 	): Promise<void> {
 		const fn = async () => {
 			const updates = Object.entries(values).map(([fieldPath, v]) => ({
 				fieldPath,
 				value: { stringValue: v },
 			}));
-			await this.callSetFields({
-				tenantId,
-				updates,
-				description: options?.description,
-			});
+			await this.callSetFields(
+				{ tenantId, updates, description: options?.description },
+				options?.timeout,
+			);
 		};
 
 		return this.withRetryAndMap(fn);
@@ -253,13 +252,12 @@ export class ConfigClient {
 	/**
 	 * Set a config field to null.
 	 */
-	async setNull(tenantId: string, fieldPath: string): Promise<void> {
+	async setNull(tenantId: string, fieldPath: string, options?: { timeout?: number }): Promise<void> {
 		const fn = async () => {
-			await this.callSetField({
-				tenantId,
-				fieldPath,
-				value: undefined,
-			});
+			await this.callSetField(
+				{ tenantId, fieldPath, value: undefined },
+				options?.timeout,
+			);
 		};
 
 		return this.withRetryAndMap(fn);
@@ -321,12 +319,12 @@ export class ConfigClient {
 		}
 	}
 
-	private callGetField(request: GetFieldRequest): Promise<GetFieldResponse> {
+	private callGetField(request: GetFieldRequest, timeoutMs?: number): Promise<GetFieldResponse> {
 		return new Promise((resolve, reject) => {
 			this.configStub.getField(
 				request,
 				this.metadata,
-				{ deadline: Date.now() + this.timeout },
+				{ deadline: Date.now() + (timeoutMs ?? this.timeout) },
 				(err: ServiceError | null, resp: GetFieldResponse) => {
 					if (err) reject(err);
 					else resolve(resp);
@@ -335,12 +333,12 @@ export class ConfigClient {
 		});
 	}
 
-	private callGetConfig(request: GetConfigRequest): Promise<GetConfigResponse> {
+	private callGetConfig(request: GetConfigRequest, timeoutMs?: number): Promise<GetConfigResponse> {
 		return new Promise((resolve, reject) => {
 			this.configStub.getConfig(
 				request,
 				this.metadata,
-				{ deadline: Date.now() + this.timeout },
+				{ deadline: Date.now() + (timeoutMs ?? this.timeout) },
 				(err: ServiceError | null, resp: GetConfigResponse) => {
 					if (err) reject(err);
 					else resolve(resp);
@@ -349,12 +347,12 @@ export class ConfigClient {
 		});
 	}
 
-	private callSetField(request: SetFieldRequest): Promise<SetFieldResponse> {
+	private callSetField(request: SetFieldRequest, timeoutMs?: number): Promise<SetFieldResponse> {
 		return new Promise((resolve, reject) => {
 			this.configStub.setField(
 				request,
 				this.metadata,
-				{ deadline: Date.now() + this.timeout },
+				{ deadline: Date.now() + (timeoutMs ?? this.timeout) },
 				(err: ServiceError | null, resp: SetFieldResponse) => {
 					if (err) reject(err);
 					else resolve(resp);
@@ -363,12 +361,12 @@ export class ConfigClient {
 		});
 	}
 
-	private callSetFields(request: SetFieldsRequest): Promise<SetFieldsResponse> {
+	private callSetFields(request: SetFieldsRequest, timeoutMs?: number): Promise<SetFieldsResponse> {
 		return new Promise((resolve, reject) => {
 			this.configStub.setFields(
 				request,
 				this.metadata,
-				{ deadline: Date.now() + this.timeout },
+				{ deadline: Date.now() + (timeoutMs ?? this.timeout) },
 				(err: ServiceError | null, resp: SetFieldsResponse) => {
 					if (err) reject(err);
 					else resolve(resp);
