@@ -124,9 +124,24 @@ export class ConfigClient {
 	/**
 	 * Get a config value converted to the specified type.
 	 */
-	get(tenantId: string, fieldPath: string, type: typeof Number, options?: { timeout?: number }): Promise<number>;
-	get(tenantId: string, fieldPath: string, type: typeof Boolean, options?: { timeout?: number }): Promise<boolean>;
-	get(tenantId: string, fieldPath: string, type: typeof String, options?: { timeout?: number }): Promise<string>;
+	get(
+		tenantId: string,
+		fieldPath: string,
+		type: typeof Number,
+		options?: { timeout?: number },
+	): Promise<number>;
+	get(
+		tenantId: string,
+		fieldPath: string,
+		type: typeof Boolean,
+		options?: { timeout?: number },
+	): Promise<boolean>;
+	get(
+		tenantId: string,
+		fieldPath: string,
+		type: typeof String,
+		options?: { timeout?: number },
+	): Promise<string>;
 	/**
 	 * Get a config value with nullable support.
 	 * Returns null if the field has no value instead of throwing.
@@ -213,7 +228,12 @@ export class ConfigClient {
 	 * Set a config value. The value is sent as a string -- the server
 	 * coerces it to the schema-defined type.
 	 */
-	async set(tenantId: string, fieldPath: string, value: string, options?: { timeout?: number }): Promise<void> {
+	async set(
+		tenantId: string,
+		fieldPath: string,
+		value: string,
+		options?: { timeout?: number },
+	): Promise<void> {
 		const fn = async () => {
 			await this.callSetField(
 				{ tenantId, fieldPath, value: { stringValue: value } },
@@ -252,12 +272,13 @@ export class ConfigClient {
 	/**
 	 * Set a config field to null.
 	 */
-	async setNull(tenantId: string, fieldPath: string, options?: { timeout?: number }): Promise<void> {
+	async setNull(
+		tenantId: string,
+		fieldPath: string,
+		options?: { timeout?: number },
+	): Promise<void> {
 		const fn = async () => {
-			await this.callSetField(
-				{ tenantId, fieldPath, value: undefined },
-				options?.timeout,
-			);
+			await this.callSetField({ tenantId, fieldPath, value: undefined }, options?.timeout);
 		};
 
 		return this.withRetryAndMap(fn);

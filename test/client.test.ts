@@ -387,7 +387,12 @@ describe("ConfigClient", () => {
 			let capturedDeadline: number | undefined;
 			const before = Date.now();
 			configStub.getField.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, {
 						value: { fieldPath: "f", value: { stringValue: "v" }, checksum: "c" },
@@ -405,7 +410,12 @@ describe("ConfigClient", () => {
 			let capturedDeadline: number | undefined;
 			const before = Date.now();
 			configStub.getConfig.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, { config: { tenantId: "t", version: 1, values: [] } });
 				},
@@ -421,7 +431,12 @@ describe("ConfigClient", () => {
 			let capturedDeadline: number | undefined;
 			const before = Date.now();
 			configStub.setField.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, { configVersion: { version: 1 } });
 				},
@@ -437,7 +452,12 @@ describe("ConfigClient", () => {
 			let capturedDeadline: number | undefined;
 			const before = Date.now();
 			configStub.setFields.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, { configVersion: { version: 1 } });
 				},
@@ -453,7 +473,12 @@ describe("ConfigClient", () => {
 			let capturedDeadline: number | undefined;
 			const before = Date.now();
 			configStub.setField.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, { configVersion: { version: 1 } });
 				},
@@ -474,7 +499,12 @@ describe("ConfigClient", () => {
 			});
 			const before = Date.now();
 			configStub.getField.mockImplementation(
-				(_req: unknown, _meta: unknown, opts: { deadline?: number }, cb: (...args: unknown[]) => void) => {
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
 					capturedDeadline = opts.deadline;
 					cb(null, {
 						value: { fieldPath: "f", value: { stringValue: "v" }, checksum: "c" },

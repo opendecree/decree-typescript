@@ -593,7 +593,7 @@ describe("ConfigWatcher", () => {
 
 		it("stops on non-retryable error", async () => {
 			const watcher = createWatcher();
-			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+			const _fee = watcher.field("payments.fee", Number, { default: 0.01 });
 
 			mockGetConfigSuccess([]);
 
