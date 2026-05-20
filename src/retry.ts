@@ -1,7 +1,9 @@
 /**
  * Retry logic with exponential backoff and jitter.
  *
- * Retries on UNAVAILABLE and DEADLINE_EXCEEDED by default.
+ * Read operations retry on UNAVAILABLE, DEADLINE_EXCEEDED, and RESOURCE_EXHAUSTED.
+ * Write operations retry only on UNAVAILABLE by default to avoid double-apply.
+ * Write retries on DEADLINE_EXCEEDED require an idempotency key.
  */
 
 import { type ServiceError, status } from "@grpc/grpc-js";
@@ -11,7 +13,19 @@ const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_INITIAL_BACKOFF = 100; // ms
 const DEFAULT_MAX_BACKOFF = 5000; // ms
 const DEFAULT_MULTIPLIER = 2;
-const DEFAULT_RETRYABLE_CODES: readonly number[] = [status.UNAVAILABLE, status.DEADLINE_EXCEEDED];
+
+export const READ_RETRYABLE_CODES: readonly number[] = [
+	status.UNAVAILABLE,
+	status.DEADLINE_EXCEEDED,
+	status.RESOURCE_EXHAUSTED,
+];
+
+export const WRITE_RETRYABLE_CODES: readonly number[] = [status.UNAVAILABLE];
+
+export const WRITE_IDEMPOTENT_RETRYABLE_CODES: readonly number[] = [
+	status.UNAVAILABLE,
+	status.DEADLINE_EXCEEDED,
+];
 
 function isServiceError(err: unknown): err is ServiceError {
 	return err instanceof Error && typeof (err as ServiceError).code === "number";
@@ -39,7 +53,7 @@ export async function withRetry<T>(
 	const initialBackoff = config.initialBackoff ?? DEFAULT_INITIAL_BACKOFF;
 	const maxBackoff = config.maxBackoff ?? DEFAULT_MAX_BACKOFF;
 	const multiplier = config.multiplier ?? DEFAULT_MULTIPLIER;
-	const retryableCodes = config.retryableCodes ?? DEFAULT_RETRYABLE_CODES;
+	const retryableCodes = config.retryableCodes ?? READ_RETRYABLE_CODES;
 
 	let lastErr: Error | undefined;
 	let backoff = initialBackoff;

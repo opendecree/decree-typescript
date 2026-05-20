@@ -45,7 +45,7 @@ export interface RetryConfig {
 	readonly maxBackoff?: number;
 	/** Backoff multiplier between attempts. Default: 2. */
 	readonly multiplier?: number;
-	/** gRPC status codes that trigger a retry. Default: [UNAVAILABLE, DEADLINE_EXCEEDED]. */
+	/** gRPC status codes that trigger a retry. Overrides the read/write split defaults. */
 	readonly retryableCodes?: (typeof GrpcStatus)[keyof typeof GrpcStatus][];
 }
 
