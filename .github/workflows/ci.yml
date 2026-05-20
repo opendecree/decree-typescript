@@ -74,6 +74,16 @@ jobs:
           files: coverage/coverage-final.json
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  version:
+    name: Version sync
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout
+      - *setup-node-22
+      - *install
+      - name: Check src/version.ts matches package.json
+        run: npm run check:version
+
   examples:
     name: Examples
     runs-on: ubuntu-latest
@@ -90,7 +100,7 @@ jobs:
   check:
     name: CI check
     if: always()
-    needs: [lint, typecheck, test, examples]
+    needs: [lint, typecheck, test, examples, version]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

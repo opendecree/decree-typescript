@@ -18,7 +18,9 @@
   ],
   "scripts": {
     "generate": "rm -rf src/generated && buf generate",
-    "build": "tsc",
+    "gen-version": "node scripts/gen-version.mjs",
+    "check:version": "node scripts/gen-version.mjs --check",
+    "build": "node scripts/gen-version.mjs && tsc",
     "lint": "biome check src/ test/",
     "format": "biome format --write src/ test/",
     "typecheck": "tsc --noEmit",
