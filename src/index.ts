@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-export const VERSION = "0.2.0-alpha.1";
+export { VERSION } from "./version.js";
 export const SUPPORTED_SERVER_VERSION = ">=0.8.0,<1.0.0";
 export const PROTO_VERSION = "v1";
 
