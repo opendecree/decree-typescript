@@ -26,7 +26,12 @@ import {
 	type GetServerInfoResponse,
 	ServerServiceClient as GrpcServerServiceClient,
 } from "./generated/centralconfig/v1/server_service.js";
-import { READ_RETRYABLE_CODES, WRITE_IDEMPOTENT_RETRYABLE_CODES, WRITE_RETRYABLE_CODES, withRetry } from "./retry.js";
+import {
+	READ_RETRYABLE_CODES,
+	WRITE_IDEMPOTENT_RETRYABLE_CODES,
+	WRITE_RETRYABLE_CODES,
+	withRetry,
+} from "./retry.js";
 import type { ClientOptions, RetryConfig, ServerInfo } from "./types.js";
 import { ConfigWatcher } from "./watcher.js";
 
@@ -241,7 +246,9 @@ export class ConfigClient {
 			);
 		};
 
-		const codes = options?.idempotencyKey ? WRITE_IDEMPOTENT_RETRYABLE_CODES : WRITE_RETRYABLE_CODES;
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
 		return this.withRetryAndMap(fn, codes);
 	}
 
@@ -267,7 +274,9 @@ export class ConfigClient {
 			);
 		};
 
-		const codes = options?.idempotencyKey ? WRITE_IDEMPOTENT_RETRYABLE_CODES : WRITE_RETRYABLE_CODES;
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
 		return this.withRetryAndMap(fn, codes);
 	}
 
@@ -283,7 +292,9 @@ export class ConfigClient {
 			await this.callSetField({ tenantId, fieldPath, value: undefined }, options?.timeout);
 		};
 
-		const codes = options?.idempotencyKey ? WRITE_IDEMPOTENT_RETRYABLE_CODES : WRITE_RETRYABLE_CODES;
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
 		return this.withRetryAndMap(fn, codes);
 	}
 

@@ -131,12 +131,13 @@ describe("retry code sets", () => {
 	});
 
 	it("withRetry uses WRITE_RETRYABLE_CODES: does not retry DEADLINE_EXCEEDED", async () => {
-		const fn = vi
-			.fn()
-			.mockRejectedValue(makeServiceError(status.DEADLINE_EXCEEDED, "timeout"));
+		const fn = vi.fn().mockRejectedValue(makeServiceError(status.DEADLINE_EXCEEDED, "timeout"));
 
 		await expect(
-			withRetry({ maxAttempts: 3, initialBackoff: 1, retryableCodes: [...WRITE_RETRYABLE_CODES] }, fn),
+			withRetry(
+				{ maxAttempts: 3, initialBackoff: 1, retryableCodes: [...WRITE_RETRYABLE_CODES] },
+				fn,
+			),
 		).rejects.toThrow("timeout");
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
