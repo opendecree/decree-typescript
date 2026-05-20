@@ -430,5 +430,18 @@ describe("ConfigClient", () => {
 			const c = new ConfigClient("localhost:9090", { insecure: true, retry: false });
 			c.close();
 		});
+
+		it("warns when insecure is true and a token is configured", () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const c = new ConfigClient("localhost:9090", {
+				insecure: true,
+				token: "secret",
+				retry: false,
+			});
+			c.close();
+			expect(warn).toHaveBeenCalledOnce();
+			expect(warn.mock.calls[0][0]).toContain("cleartext");
+			warn.mockRestore();
+		});
 	});
 });
