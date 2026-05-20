@@ -382,6 +382,144 @@ describe("ConfigClient", () => {
 		});
 	});
 
+	describe("per-call timeout", () => {
+		it("get() uses per-call timeout over client default", async () => {
+			let capturedDeadline: number | undefined;
+			const before = Date.now();
+			configStub.getField.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, {
+						value: { fieldPath: "f", value: { stringValue: "v" }, checksum: "c" },
+					});
+				},
+			);
+
+			await client.get("tenant-1", "f", String, { timeout: 500 });
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 500);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+
+		it("getAll() uses per-call timeout over client default", async () => {
+			let capturedDeadline: number | undefined;
+			const before = Date.now();
+			configStub.getConfig.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, { config: { tenantId: "t", version: 1, values: [] } });
+				},
+			);
+
+			await client.getAll("tenant-1", { timeout: 500 });
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 500);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+
+		it("set() uses per-call timeout over client default", async () => {
+			let capturedDeadline: number | undefined;
+			const before = Date.now();
+			configStub.setField.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.set("tenant-1", "f", "v", { timeout: 500 });
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 500);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+
+		it("setMany() uses per-call timeout over client default", async () => {
+			let capturedDeadline: number | undefined;
+			const before = Date.now();
+			configStub.setFields.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setMany("tenant-1", { f: "v" }, { timeout: 500 });
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 500);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+
+		it("setNull() uses per-call timeout over client default", async () => {
+			let capturedDeadline: number | undefined;
+			const before = Date.now();
+			configStub.setField.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setNull("tenant-1", "f", { timeout: 500 });
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 500);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+
+		it("falls back to client default when no per-call timeout", async () => {
+			let capturedDeadline: number | undefined;
+			const clientWithTimeout = new ConfigClient("localhost:9090", {
+				subject: "u",
+				timeout: 3000,
+				retry: false,
+			});
+			const before = Date.now();
+			configStub.getField.mockImplementation(
+				(
+					_req: unknown,
+					_meta: unknown,
+					opts: { deadline?: number },
+					cb: (...args: unknown[]) => void,
+				) => {
+					capturedDeadline = opts.deadline;
+					cb(null, {
+						value: { fieldPath: "f", value: { stringValue: "v" }, checksum: "c" },
+					});
+				},
+			);
+
+			await clientWithTimeout.get("tenant-1", "f");
+			clientWithTimeout.close();
+
+			expect(capturedDeadline).toBeGreaterThanOrEqual(before + 3000);
+			expect(capturedDeadline).toBeLessThan(before + 10_000);
+		});
+	});
+
 	describe("auth metadata", () => {
 		it("sets subject and role metadata headers", async () => {
 			configStub.getField.mockImplementation(
