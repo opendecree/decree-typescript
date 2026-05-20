@@ -714,7 +714,9 @@ describe("ConfigWatcher", () => {
 						config: {
 							tenantId: "tenant-1",
 							version: 2,
-							values: [{ fieldPath: "payments.fee", value: { numberValue: 0.99 }, checksum: "xyz" }],
+							values: [
+								{ fieldPath: "payments.fee", value: { numberValue: 0.99 }, checksum: "xyz" },
+							],
 						},
 					});
 				},
@@ -751,7 +753,9 @@ describe("ConfigWatcher", () => {
 						config: {
 							tenantId: "tenant-1",
 							version: 2,
-							values: [{ fieldPath: "payments.fee", value: { numberValue: 0.05 }, checksum: "xyz" }],
+							values: [
+								{ fieldPath: "payments.fee", value: { numberValue: 0.05 }, checksum: "xyz" },
+							],
 						},
 					});
 				},
