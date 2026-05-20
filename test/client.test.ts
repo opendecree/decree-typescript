@@ -421,14 +421,27 @@ describe("ConfigClient", () => {
 	});
 
 	describe("TLS channel", () => {
-		it("creates insecure channel by default", () => {
+		it("creates TLS channel by default", () => {
 			const c = new ConfigClient("localhost:9090", { retry: false });
 			c.close();
 		});
 
-		it("creates TLS channel when insecure is false", () => {
-			const c = new ConfigClient("localhost:9090", { insecure: false, retry: false });
+		it("creates insecure channel when insecure is true", () => {
+			const c = new ConfigClient("localhost:9090", { insecure: true, retry: false });
 			c.close();
+		});
+
+		it("warns when insecure is true and a token is configured", () => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			const c = new ConfigClient("localhost:9090", {
+				insecure: true,
+				token: "secret",
+				retry: false,
+			});
+			c.close();
+			expect(warn).toHaveBeenCalledOnce();
+			expect(warn.mock.calls[0][0]).toContain("cleartext");
+			warn.mockRestore();
 		});
 	});
 });
