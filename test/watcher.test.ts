@@ -693,6 +693,180 @@ describe("ConfigWatcher", () => {
 
 			vi.useRealTimers();
 		});
+
+		it("reloads snapshot on reconnect and applies updated values", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+
+			// Initial snapshot: fee = 0.05
+			mockGetConfigSuccess([{ fieldPath: "payments.fee", value: { numberValue: 0.05 } }]);
+			await watcher.start();
+			expect(fee.value).toBe(0.05);
+
+			// On reconnect, snapshot returns fee = 0.99 (updated while disconnected)
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, {
+						config: {
+							tenantId: "tenant-1",
+							version: 2,
+							values: [
+								{ fieldPath: "payments.fee", value: { numberValue: 0.99 }, checksum: "xyz" },
+							],
+						},
+					});
+				},
+			);
+
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "server unavailable"));
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// loadSnapshot called again (total 2 getConfig calls)
+			expect(configStub.getConfig).toHaveBeenCalledTimes(2);
+			// Value reflects the reconnect snapshot
+			expect(fee.value).toBe(0.99);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
+		it("applies stream updates after reconnect snapshot", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([{ fieldPath: "payments.fee", value: { numberValue: 0.05 } }]);
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			// Reconnect snapshot returns same value
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, {
+						config: {
+							tenantId: "tenant-1",
+							version: 2,
+							values: [
+								{ fieldPath: "payments.fee", value: { numberValue: 0.05 }, checksum: "xyz" },
+							],
+						},
+					});
+				},
+			);
+
+			mockStream.emit("end");
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// Now emit a live update on the new stream
+			newStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 3,
+					fieldPath: "payments.fee",
+					oldValue: { numberValue: 0.05 },
+					newValue: { numberValue: 0.77 },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			expect(fee.value).toBe(0.77);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
+		it("retries with backoff when snapshot fails during reconnect", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+
+			// First reconnect snapshot fails
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(makeServiceError(status.UNAVAILABLE, "snapshot failed"));
+				},
+			);
+			// Second reconnect snapshot succeeds
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, {
+						config: { tenantId: "tenant-1", version: 2, values: [] },
+					});
+				},
+			);
+
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "server unavailable"));
+			// First reconnect attempt fires, snapshot fails, schedules another
+			await vi.advanceTimersByTimeAsync(60_000);
+			// Second reconnect attempt fires, snapshot succeeds
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// subscribe called twice (start + successful reconnect)
+			expect(configStub.subscribe).toHaveBeenCalledTimes(2);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
+		it("resets backoff after first successful data event", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			// Receive data — backoff should reset
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 2,
+					fieldPath: "payments.fee",
+					oldValue: { numberValue: 0.01 },
+					newValue: { numberValue: 0.02 },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "disconnect"));
+
+			// INITIAL_RECONNECT_BACKOFF is 500ms; advance just past it
+			await vi.advanceTimersByTimeAsync(2_000);
+
+			// subscribe called a second time, confirming backoff was short (reset to initial)
+			expect(configStub.subscribe).toHaveBeenCalledTimes(2);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
 	});
 
 	describe("stopped guards", () => {

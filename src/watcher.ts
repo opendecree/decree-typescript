@@ -382,7 +382,7 @@ export class ConfigWatcher {
 		}
 	}
 
-	private subscribe(backoff = INITIAL_RECONNECT_BACKOFF): void {
+	private subscribe(initialBackoff = INITIAL_RECONNECT_BACKOFF): void {
 		if (this.stopped) {
 			return;
 		}
@@ -395,7 +395,10 @@ export class ConfigWatcher {
 
 		this.stream = this.configStub.subscribe(request, this.metadata);
 
+		let backoff = initialBackoff;
+
 		this.stream.on("data", (resp: SubscribeResponse) => {
+			backoff = INITIAL_RECONNECT_BACKOFF;
 			this.processChange(resp);
 		});
 
@@ -432,8 +435,21 @@ export class ConfigWatcher {
 
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = null;
-			this.subscribe(nextBackoff);
+			void this.reloadAndSubscribe(nextBackoff);
 		}, delay);
+	}
+
+	private async reloadAndSubscribe(backoff: number): Promise<void> {
+		if (this.stopped) {
+			return;
+		}
+		try {
+			await this.loadSnapshot();
+		} catch {
+			this.scheduleReconnect(backoff);
+			return;
+		}
+		this.subscribe(INITIAL_RECONNECT_BACKOFF);
 	}
 
 	private processChange(resp: SubscribeResponse): void {
