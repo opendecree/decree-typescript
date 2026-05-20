@@ -558,6 +558,56 @@ describe("ConfigClient", () => {
 		});
 	});
 
+	describe("AbortSignal", () => {
+		function makeCancellableStub(mock: MockInstance) {
+			mock.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => ({
+					cancel: () => cb(makeServiceError(status.CANCELLED, "rpc cancelled"), undefined),
+				}),
+			);
+		}
+
+		it("get() cancels the in-flight call when signal is aborted", async () => {
+			makeCancellableStub(configStub.getField);
+			const controller = new AbortController();
+			const p = client.get("tenant-1", "f", String, { signal: controller.signal });
+			controller.abort();
+			await expect(p).rejects.toThrow(DecreeError);
+		});
+
+		it("getAll() cancels the in-flight call when signal is aborted", async () => {
+			makeCancellableStub(configStub.getConfig);
+			const controller = new AbortController();
+			const p = client.getAll("tenant-1", { signal: controller.signal });
+			controller.abort();
+			await expect(p).rejects.toThrow(DecreeError);
+		});
+
+		it("set() cancels the in-flight call when signal is aborted", async () => {
+			makeCancellableStub(configStub.setField);
+			const controller = new AbortController();
+			const p = client.set("tenant-1", "f", "v", { signal: controller.signal });
+			controller.abort();
+			await expect(p).rejects.toThrow(DecreeError);
+		});
+
+		it("setMany() cancels the in-flight call when signal is aborted", async () => {
+			makeCancellableStub(configStub.setFields);
+			const controller = new AbortController();
+			const p = client.setMany("tenant-1", { f: "v" }, { signal: controller.signal });
+			controller.abort();
+			await expect(p).rejects.toThrow(DecreeError);
+		});
+
+		it("setNull() cancels the in-flight call when signal is aborted", async () => {
+			makeCancellableStub(configStub.setField);
+			const controller = new AbortController();
+			const p = client.setNull("tenant-1", "f", { signal: controller.signal });
+			controller.abort();
+			await expect(p).rejects.toThrow(DecreeError);
+		});
+	});
+
 	describe("TLS channel", () => {
 		it("creates TLS channel by default", () => {
 			const c = new ConfigClient("localhost:9090", { retry: false });
