@@ -2,16 +2,22 @@ import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import { describe, expect, it } from "vitest";
 import {
 	AlreadyExistsError,
+	CancelledError,
 	ChecksumMismatchError,
+	DataLossError,
+	DeadlineExceededError,
 	DecreeError,
 	IncompatibleServerError,
 	InvalidArgumentError,
 	LockedError,
 	mapGrpcError,
 	NotFoundError,
+	OutOfRangeError,
 	PermissionDeniedError,
+	ResourceExhaustedError,
 	TypeMismatchError,
 	UnavailableError,
+	UnimplementedError,
 } from "../src/errors.js";
 
 function makeServiceError(code: number, details: string): ServiceError {
@@ -41,7 +47,22 @@ describe("error hierarchy", () => {
 		expect(err.code).toBeUndefined();
 	});
 
-	it("subclasses extend DecreeError", () => {
+	it("DecreeError toJSON includes name, message, code", () => {
+		const err = new DecreeError("msg", status.INTERNAL);
+		expect(err.toJSON()).toEqual({ name: "DecreeError", message: "msg", code: status.INTERNAL });
+	});
+
+	it("DecreeError toJSON code is undefined when not set", () => {
+		const err = new DecreeError("msg");
+		expect(err.toJSON()).toEqual({ name: "DecreeError", message: "msg", code: undefined });
+	});
+
+	it("subclass toJSON reflects subclass name", () => {
+		const err = new NotFoundError("gone", status.NOT_FOUND);
+		expect(err.toJSON()).toMatchObject({ name: "NotFoundError", code: status.NOT_FOUND });
+	});
+
+	it("original subclasses extend DecreeError", () => {
 		const classes = [
 			NotFoundError,
 			AlreadyExistsError,
@@ -50,6 +71,25 @@ describe("error hierarchy", () => {
 			ChecksumMismatchError,
 			PermissionDeniedError,
 			UnavailableError,
+		] as const;
+
+		for (const Cls of classes) {
+			const err = new Cls("msg", status.UNKNOWN);
+			expect(err).toBeInstanceOf(DecreeError);
+			expect(err).toBeInstanceOf(Error);
+			expect(err.message).toBe("msg");
+			expect(err.code).toBe(status.UNKNOWN);
+		}
+	});
+
+	it("new typed subclasses extend DecreeError", () => {
+		const classes = [
+			ResourceExhaustedError,
+			DataLossError,
+			OutOfRangeError,
+			CancelledError,
+			UnimplementedError,
+			DeadlineExceededError,
 		] as const;
 
 		for (const Cls of classes) {
@@ -119,6 +159,42 @@ describe("mapGrpcError", () => {
 		expect(err).toBeInstanceOf(UnavailableError);
 	});
 
+	it("maps RESOURCE_EXHAUSTED to ResourceExhaustedError", () => {
+		const err = mapGrpcError(makeServiceError(status.RESOURCE_EXHAUSTED, "quota exceeded"));
+		expect(err).toBeInstanceOf(ResourceExhaustedError);
+		expect(err.code).toBe(status.RESOURCE_EXHAUSTED);
+	});
+
+	it("maps DATA_LOSS to DataLossError", () => {
+		const err = mapGrpcError(makeServiceError(status.DATA_LOSS, "data lost"));
+		expect(err).toBeInstanceOf(DataLossError);
+		expect(err.code).toBe(status.DATA_LOSS);
+	});
+
+	it("maps OUT_OF_RANGE to OutOfRangeError", () => {
+		const err = mapGrpcError(makeServiceError(status.OUT_OF_RANGE, "out of range"));
+		expect(err).toBeInstanceOf(OutOfRangeError);
+		expect(err.code).toBe(status.OUT_OF_RANGE);
+	});
+
+	it("maps CANCELLED to CancelledError", () => {
+		const err = mapGrpcError(makeServiceError(status.CANCELLED, "cancelled"));
+		expect(err).toBeInstanceOf(CancelledError);
+		expect(err.code).toBe(status.CANCELLED);
+	});
+
+	it("maps UNIMPLEMENTED to UnimplementedError", () => {
+		const err = mapGrpcError(makeServiceError(status.UNIMPLEMENTED, "not implemented"));
+		expect(err).toBeInstanceOf(UnimplementedError);
+		expect(err.code).toBe(status.UNIMPLEMENTED);
+	});
+
+	it("maps DEADLINE_EXCEEDED to DeadlineExceededError", () => {
+		const err = mapGrpcError(makeServiceError(status.DEADLINE_EXCEEDED, "deadline exceeded"));
+		expect(err).toBeInstanceOf(DeadlineExceededError);
+		expect(err.code).toBe(status.DEADLINE_EXCEEDED);
+	});
+
 	it("maps unknown codes to generic DecreeError", () => {
 		const err = mapGrpcError(makeServiceError(status.INTERNAL, "internal error"));
 		expect(err).toBeInstanceOf(DecreeError);
@@ -135,5 +211,17 @@ describe("mapGrpcError", () => {
 		noDetails.details = "";
 		noDetails.metadata = new Metadata();
 		expect(mapGrpcError(noDetails).message).toBe("fallback");
+	});
+
+	it("chains cause from original gRPC error", () => {
+		const grpcErr = makeServiceError(status.NOT_FOUND, "not found");
+		const err = mapGrpcError(grpcErr);
+		expect((err as Error & { cause: unknown }).cause).toBe(grpcErr);
+	});
+
+	it("generic DecreeError also chains cause", () => {
+		const grpcErr = makeServiceError(status.INTERNAL, "internal");
+		const err = mapGrpcError(grpcErr);
+		expect((err as Error & { cause: unknown }).cause).toBe(grpcErr);
 	});
 });
