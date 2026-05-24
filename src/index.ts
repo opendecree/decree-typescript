@@ -12,8 +12,8 @@ export { createChannel } from "./channel.js";
 // Client
 export { ConfigClient } from "./client.js";
 export { checkVersionCompatible, parseVersion, satisfies } from "./compat.js";
-export type { Converter } from "./convert.js";
-export { convertValue, typedValueToString } from "./convert.js";
+export type { Converter, SetValue } from "./convert.js";
+export { convertValue, typedValueToString, valueToTyped } from "./convert.js";
 // Error hierarchy
 export {
 	AlreadyExistsError,

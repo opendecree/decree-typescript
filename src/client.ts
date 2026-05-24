@@ -8,7 +8,13 @@
 import { Metadata, type ServiceError } from "@grpc/grpc-js";
 import { createChannel } from "./channel.js";
 import { checkVersionCompatible } from "./compat.js";
-import { type Converter, convertValue, typedValueToString } from "./convert.js";
+import {
+	type Converter,
+	convertValue,
+	type SetValue,
+	typedValueToString,
+	valueToTyped,
+} from "./convert.js";
 import { mapGrpcError, NotFoundError } from "./errors.js";
 import {
 	type GetConfigRequest,
@@ -240,8 +246,9 @@ export class ConfigClient {
 	}
 
 	/**
-	 * Set a config value. The value is sent as a string -- the server
-	 * coerces it to the schema-defined type.
+	 * Set a config value. The value is sent as a string — the server
+	 * coerces it to the schema-defined type. For type-safe writes, prefer
+	 * setNumber(), setBool(), setTime(), or setDuration().
 	 */
 	async set(
 		tenantId: string,
@@ -273,16 +280,79 @@ export class ConfigClient {
 		return this.withRetryAndMap(fn, codes);
 	}
 
+	/** Set a numeric config value. Sends the native number as a proto numberValue. */
+	async setNumber(
+		tenantId: string,
+		fieldPath: string,
+		value: number,
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
+	): Promise<void> {
+		return this.setTyped(tenantId, fieldPath, value, options);
+	}
+
+	/** Set a boolean config value. Sends the native boolean as a proto boolValue. */
+	async setBool(
+		tenantId: string,
+		fieldPath: string,
+		value: boolean,
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
+	): Promise<void> {
+		return this.setTyped(tenantId, fieldPath, value, options);
+	}
+
+	/** Set a timestamp config value. Sends the Date as a proto timeValue. */
+	async setTime(
+		tenantId: string,
+		fieldPath: string,
+		value: Date,
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
+	): Promise<void> {
+		return this.setTyped(tenantId, fieldPath, value, options);
+	}
+
+	/**
+	 * Set a duration config value. The value must be a duration string
+	 * (e.g. "1h30m", "300s") — the server parses and validates the format.
+	 */
+	async setDuration(
+		tenantId: string,
+		fieldPath: string,
+		value: string,
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
+	): Promise<void> {
+		return this.setTyped(tenantId, fieldPath, value, options);
+	}
+
 	/**
 	 * Atomically set multiple config values.
 	 *
-	 * @param values - Record mapping field paths to string values.
+	 * @param values - Record mapping field paths to typed values (string, number, boolean, or Date).
 	 * @param options - Optional description for the audit log, idempotency key for safe DEADLINE_EXCEEDED retries,
 	 *   and per-field expected checksums for optimistic concurrency control.
 	 */
 	async setMany(
 		tenantId: string,
-		values: Record<string, string>,
+		values: Record<string, SetValue>,
 		options?: {
 			description?: string;
 			timeout?: number;
@@ -294,7 +364,7 @@ export class ConfigClient {
 		const fn = async () => {
 			const updates = Object.entries(values).map(([fieldPath, v]) => ({
 				fieldPath,
-				value: { stringValue: v },
+				value: valueToTyped(v),
 				expectedChecksum: options?.expectedChecksums?.[fieldPath],
 			}));
 			await this.callSetFields(
@@ -382,6 +452,36 @@ export class ConfigClient {
 	}
 
 	// --- Private helpers ---
+
+	private async setTyped(
+		tenantId: string,
+		fieldPath: string,
+		value: SetValue,
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
+	): Promise<void> {
+		const fn = async () => {
+			await this.callSetField(
+				{
+					tenantId,
+					fieldPath,
+					value: valueToTyped(value),
+					expectedChecksum: options?.expectedChecksum,
+				},
+				options?.timeout,
+				options?.signal,
+			);
+		};
+
+		const codes = options?.idempotencyKey
+			? WRITE_IDEMPOTENT_RETRYABLE_CODES
+			: WRITE_RETRYABLE_CODES;
+		return this.withRetryAndMap(fn, codes);
+	}
 
 	private async fetchServerInfo(): Promise<ServerInfo> {
 		const fn = () => this.callGetServerInfo({});

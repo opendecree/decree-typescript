@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertValue, typedValueToString } from "../src/convert.js";
+import { convertValue, typedValueToString, valueToTyped } from "../src/convert.js";
 import { TypeMismatchError } from "../src/errors.js";
 import type { TypedValue } from "../src/generated/centralconfig/v1/types.js";
 
@@ -168,5 +168,32 @@ describe("typedValueToString", () => {
 	it("returns empty string for empty TypedValue", () => {
 		const tv: TypedValue = {};
 		expect(typedValueToString(tv)).toBe("");
+	});
+});
+
+describe("valueToTyped", () => {
+	it("wraps string as stringValue", () => {
+		expect(valueToTyped("hello")).toEqual({ stringValue: "hello" });
+	});
+
+	it("wraps number as numberValue", () => {
+		expect(valueToTyped(3.14)).toEqual({ numberValue: 3.14 });
+	});
+
+	it("wraps integer as numberValue", () => {
+		expect(valueToTyped(42)).toEqual({ numberValue: 42 });
+	});
+
+	it("wraps true as boolValue", () => {
+		expect(valueToTyped(true)).toEqual({ boolValue: true });
+	});
+
+	it("wraps false as boolValue", () => {
+		expect(valueToTyped(false)).toEqual({ boolValue: false });
+	});
+
+	it("wraps Date as timeValue", () => {
+		const d = new Date("2024-01-15T00:00:00Z");
+		expect(valueToTyped(d)).toEqual({ timeValue: d });
 	});
 });
