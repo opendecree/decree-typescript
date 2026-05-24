@@ -11,6 +11,28 @@ import type { TypedValue } from "./generated/centralconfig/v1/types.js";
 /** Runtime converter type — pass String, Number, or Boolean to get(). */
 export type Converter = typeof String | typeof Number | typeof Boolean;
 
+/** Native value types accepted by typed set methods. */
+export type SetValue = string | number | boolean | Date;
+
+/**
+ * Convert a native TypeScript value to a proto TypedValue for writing.
+ *
+ * Booleans are checked before numbers since typeof boolean === "boolean".
+ * Dates become timeValue. Numbers become numberValue. Strings become stringValue.
+ */
+export function valueToTyped(value: SetValue): TypedValue {
+	if (typeof value === "boolean") {
+		return { boolValue: value };
+	}
+	if (typeof value === "number") {
+		return { numberValue: value };
+	}
+	if (value instanceof Date) {
+		return { timeValue: value };
+	}
+	return { stringValue: value };
+}
+
 /**
  * Convert a raw string value to the target type.
  *

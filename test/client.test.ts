@@ -290,6 +290,146 @@ describe("ConfigClient", () => {
 		});
 	});
 
+	describe("setNumber()", () => {
+		it("calls setField with numberValue", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setNumber("tenant-1", "payments.fee", 0.05);
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "payments.fee",
+				value: { numberValue: 0.05 },
+				expectedChecksum: undefined,
+			});
+		});
+
+		it("passes expectedChecksum", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setNumber("tenant-1", "payments.fee", 42, { expectedChecksum: "cs1" });
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0].expectedChecksum).toBe("cs1");
+		});
+	});
+
+	describe("setBool()", () => {
+		it("calls setField with boolValue", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setBool("tenant-1", "feature.enabled", true);
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "feature.enabled",
+				value: { boolValue: true },
+				expectedChecksum: undefined,
+			});
+		});
+
+		it("sends false correctly", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setBool("tenant-1", "feature.enabled", false);
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0].value).toEqual({ boolValue: false });
+		});
+	});
+
+	describe("setTime()", () => {
+		it("calls setField with timeValue", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			const d = new Date("2024-01-15T12:00:00Z");
+			await client.setTime("tenant-1", "expiry.date", d);
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "expiry.date",
+				value: { timeValue: d },
+				expectedChecksum: undefined,
+			});
+		});
+	});
+
+	describe("setDuration()", () => {
+		it("calls setField with stringValue for duration string", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.setDuration("tenant-1", "cache.ttl", "1h30m");
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "cache.ttl",
+				value: { stringValue: "1h30m" },
+				expectedChecksum: undefined,
+			});
+		});
+	});
+
+	describe("setMany() typed values", () => {
+		it("converts mixed types to typed proto values", async () => {
+			configStub.setFields.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 2 } });
+				},
+			);
+
+			const d = new Date("2024-06-01T00:00:00Z");
+			await client.setMany("tenant-1", {
+				"payments.fee": 0.05,
+				"feature.enabled": true,
+				"app.name": "myapp",
+				"expiry.date": d,
+			});
+
+			const callArgs = configStub.setFields.mock.calls[0];
+			const updates: Array<{ fieldPath: string; value: unknown }> = callArgs?.[0].updates;
+			expect(updates.find((u) => u.fieldPath === "payments.fee")?.value).toEqual({
+				numberValue: 0.05,
+			});
+			expect(updates.find((u) => u.fieldPath === "feature.enabled")?.value).toEqual({
+				boolValue: true,
+			});
+			expect(updates.find((u) => u.fieldPath === "app.name")?.value).toEqual({
+				stringValue: "myapp",
+			});
+			expect(updates.find((u) => u.fieldPath === "expiry.date")?.value).toEqual({
+				timeValue: d,
+			});
+		});
+	});
+
 	describe("expectedChecksum plumbing", () => {
 		it("set() passes expectedChecksum to proto", async () => {
 			configStub.setField.mockImplementation(
