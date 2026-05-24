@@ -484,6 +484,33 @@ describe("ConfigWatcher", () => {
 		});
 	});
 
+	describe("Symbol.asyncDispose", () => {
+		it("awaits stop() before resolving", async () => {
+			const watcher = createWatcher();
+			mockGetConfigSuccess([]);
+			watcher.field("payments.fee", Number, { default: 0.01 });
+
+			await watcher.start();
+			await watcher[Symbol.asyncDispose]();
+
+			expect(mockStream.cancel).toHaveBeenCalledOnce();
+		});
+
+		it("works with await using", async () => {
+			const watcher = createWatcher();
+			mockGetConfigSuccess([]);
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			await watcher.start();
+
+			await (async () => {
+				await using w = watcher;
+				void w;
+			})();
+
+			expect(mockStream.cancel).toHaveBeenCalledOnce();
+		});
+	});
+
 	describe("processing changes", () => {
 		it("updates fields on data events", async () => {
 			const watcher = createWatcher();
