@@ -2,6 +2,7 @@ import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { ConfigClient } from "../src/client.js";
 import {
+	ChecksumMismatchError,
 	DecreeError,
 	IncompatibleServerError,
 	NotFoundError,
@@ -284,7 +285,100 @@ describe("ConfigClient", () => {
 				tenantId: "tenant-1",
 				fieldPath: "payments.fee",
 				value: undefined,
+				expectedChecksum: undefined,
 			});
+		});
+	});
+
+	describe("expectedChecksum plumbing", () => {
+		it("set() passes expectedChecksum to proto", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 1 } });
+				},
+			);
+
+			await client.set("tenant-1", "payments.fee", "0.5%", { expectedChecksum: "abc123" });
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "payments.fee",
+				value: { stringValue: "0.5%" },
+				expectedChecksum: "abc123",
+			});
+		});
+
+		it("set() raises ChecksumMismatchError on ABORTED", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(makeServiceError(status.ABORTED, "checksum mismatch"));
+				},
+			);
+
+			await expect(
+				client.set("tenant-1", "payments.fee", "0.5%", { expectedChecksum: "stale" }),
+			).rejects.toThrow(ChecksumMismatchError);
+		});
+
+		it("setMany() passes per-field expectedChecksums to proto", async () => {
+			configStub.setFields.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 2 } });
+				},
+			);
+
+			await client.setMany("tenant-1", { a: "1", b: "2" }, { expectedChecksums: { a: "cs-a" } });
+
+			const callArgs = configStub.setFields.mock.calls[0];
+			const updates: Array<{ fieldPath: string; expectedChecksum?: string }> =
+				callArgs?.[0].updates;
+			const updateA = updates.find((u) => u.fieldPath === "a");
+			const updateB = updates.find((u) => u.fieldPath === "b");
+			expect(updateA?.expectedChecksum).toBe("cs-a");
+			expect(updateB?.expectedChecksum).toBeUndefined();
+		});
+
+		it("setMany() raises ChecksumMismatchError on ABORTED", async () => {
+			configStub.setFields.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(makeServiceError(status.ABORTED, "checksum mismatch"));
+				},
+			);
+
+			await expect(
+				client.setMany("tenant-1", { a: "1" }, { expectedChecksums: { a: "stale" } }),
+			).rejects.toThrow(ChecksumMismatchError);
+		});
+
+		it("setNull() passes expectedChecksum to proto", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { configVersion: { version: 3 } });
+				},
+			);
+
+			await client.setNull("tenant-1", "payments.fee", { expectedChecksum: "xyz" });
+
+			const callArgs = configStub.setField.mock.calls[0];
+			expect(callArgs?.[0]).toEqual({
+				tenantId: "tenant-1",
+				fieldPath: "payments.fee",
+				value: undefined,
+				expectedChecksum: "xyz",
+			});
+		});
+
+		it("setNull() raises ChecksumMismatchError on ABORTED", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(makeServiceError(status.ABORTED, "checksum mismatch"));
+				},
+			);
+
+			await expect(
+				client.setNull("tenant-1", "payments.fee", { expectedChecksum: "stale" }),
+			).rejects.toThrow(ChecksumMismatchError);
 		});
 	});
 
