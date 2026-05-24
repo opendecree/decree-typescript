@@ -382,6 +382,23 @@ describe("ConfigClient", () => {
 		});
 	});
 
+	describe("Symbol.asyncDispose", () => {
+		it("closes both stubs and resolves", async () => {
+			await client[Symbol.asyncDispose]();
+			expect(configStub.close).toHaveBeenCalledTimes(1);
+			expect(serverStub.close).toHaveBeenCalledTimes(1);
+		});
+
+		it("works with await using", async () => {
+			await (async () => {
+				await using c = client;
+				void c;
+			})();
+			expect(configStub.close).toHaveBeenCalledTimes(1);
+			expect(serverStub.close).toHaveBeenCalledTimes(1);
+		});
+	});
+
 	describe("per-call timeout", () => {
 		it("get() uses per-call timeout over client default", async () => {
 			let capturedDeadline: number | undefined;

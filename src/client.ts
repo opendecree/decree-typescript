@@ -353,6 +353,13 @@ export class ConfigClient {
 		this.close();
 	}
 
+	/**
+	 * Async dispose pattern support — use with `await using`.
+	 */
+	async [Symbol.asyncDispose](): Promise<void> {
+		this.close();
+	}
+
 	// --- Private helpers ---
 
 	private async fetchServerInfo(): Promise<ServerInfo> {

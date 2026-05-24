@@ -357,10 +357,17 @@ export class ConfigWatcher {
 	 * Dispose pattern support (TypeScript 5.2+).
 	 *
 	 * Calls stop() synchronously (best-effort). For full cleanup, prefer
-	 * calling `await watcher.stop()` explicitly.
+	 * `await using` or calling `await watcher.stop()` explicitly.
 	 */
 	[Symbol.dispose](): void {
 		void this.stop();
+	}
+
+	/**
+	 * Async dispose pattern support — use with `await using`.
+	 */
+	async [Symbol.asyncDispose](): Promise<void> {
+		await this.stop();
 	}
 
 	private async loadSnapshot(): Promise<void> {
