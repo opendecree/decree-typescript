@@ -49,6 +49,16 @@ export interface RetryConfig {
 	readonly retryableCodes?: (typeof GrpcStatus)[keyof typeof GrpcStatus][];
 }
 
+/** TLS/mTLS credential material for a ConfigClient. */
+export interface TlsOptions {
+	/** PEM-encoded root CA certificate(s). Overrides the system certificate store. */
+	readonly rootCerts?: Buffer;
+	/** PEM-encoded client private key for mTLS. Required when certChain is set. */
+	readonly privateKey?: Buffer;
+	/** PEM-encoded client certificate chain for mTLS. Required when privateKey is set. */
+	readonly certChain?: Buffer;
+}
+
 /** Options for configuring a ConfigClient. */
 export interface ClientOptions {
 	/** Identity for x-subject metadata header. */
@@ -61,6 +71,8 @@ export interface ClientOptions {
 	readonly token?: string;
 	/** Use plaintext (no TLS). Default: false. Set to true only for local/dev servers without TLS. */
 	readonly insecure?: boolean;
+	/** TLS credential overrides: custom CA, or client cert/key for mTLS. Ignored when insecure is true. */
+	readonly tls?: TlsOptions;
 	/** Default per-RPC timeout in milliseconds. Default: 10000. */
 	readonly timeout?: number;
 	/** Retry configuration. Set to false to disable retry. Default: RetryConfig defaults. */

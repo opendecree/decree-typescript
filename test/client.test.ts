@@ -903,5 +903,49 @@ describe("ConfigClient", () => {
 			expect(warn.mock.calls[0][0]).toContain("cleartext");
 			warn.mockRestore();
 		});
+
+		it("creates TLS channel with custom root CA", () => {
+			const rootCerts = Buffer.from(
+				"-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n",
+			);
+			const c = new ConfigClient("localhost:9090", {
+				tls: { rootCerts },
+				retry: false,
+			});
+			c.close();
+		});
+
+		it("creates TLS channel with mTLS client cert", async () => {
+			const grpcCredentials = await import("@grpc/grpc-js");
+			const createSsl = vi
+				.spyOn(grpcCredentials.credentials, "createSsl")
+				.mockReturnValue(
+					grpcCredentials.credentials.createInsecure() as ReturnType<
+						typeof grpcCredentials.credentials.createSsl
+					>,
+				);
+			const rootCerts = Buffer.from("fake-ca");
+			const privateKey = Buffer.from("fake-key");
+			const certChain = Buffer.from("fake-cert");
+			const c = new ConfigClient("localhost:9090", {
+				tls: { rootCerts, privateKey, certChain },
+				retry: false,
+			});
+			c.close();
+			expect(createSsl).toHaveBeenCalledWith(rootCerts, privateKey, certChain);
+			createSsl.mockRestore();
+		});
+
+		it("ignores tls option when insecure is true", () => {
+			const rootCerts = Buffer.from(
+				"-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n",
+			);
+			const c = new ConfigClient("localhost:9090", {
+				insecure: true,
+				tls: { rootCerts },
+				retry: false,
+			});
+			c.close();
+		});
 	});
 });

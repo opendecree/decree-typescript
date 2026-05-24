@@ -28,5 +28,10 @@ export function createChannel(options: ClientOptions): ChannelCredentials {
 		}
 		return credentials.createInsecure();
 	}
-	return credentials.createSsl();
+	const tls = options.tls;
+	return credentials.createSsl(
+		tls?.rootCerts ?? null,
+		tls?.privateKey ?? null,
+		tls?.certChain ?? null,
+	);
 }

@@ -23,7 +23,8 @@ const client = new ConfigClient('localhost:9090', {
 | `role` | `string` | `"superadmin"` | Role for `x-role` metadata header |
 | `tenantId` | `string` | — | Default tenant for `x-tenant-id` metadata header |
 | `token` | `string` | — | Bearer token. When set, metadata headers are not sent |
-| `insecure` | `boolean` | `true` | Use plaintext (no TLS) |
+| `insecure` | `boolean` | `false` | Use plaintext (no TLS) |
+| `tls` | `TlsOptions` | — | Custom CA or client cert/key for mTLS. Ignored when `insecure` is true |
 | `timeout` | `number` | `10000` | Per-RPC timeout in milliseconds |
 | `retry` | `RetryConfig \| false` | See below | Retry configuration. Set to `false` to disable |
 
@@ -77,17 +78,55 @@ in the `authorization` metadata header. The `subject`, `role`, and
 
 ## TLS
 
-By default, the SDK connects with plaintext (`insecure: true`). For
-production, disable insecure mode to use TLS:
+By default, the SDK connects with TLS using the system certificate store. To
+use plaintext (local/dev only), set `insecure: true`:
 
 ```typescript
-const client = new ConfigClient('production:9090', {
-  insecure: false,
+const client = new ConfigClient('localhost:9090', {
+  insecure: true,
 });
 ```
 
-This uses `@grpc/grpc-js` default TLS credentials, which trust the system
-certificate store.
+### Custom CA
+
+To connect to a server with a private CA (self-signed or internal PKI):
+
+```typescript
+import { readFileSync } from 'node:fs';
+
+const client = new ConfigClient('production:9090', {
+  tls: {
+    rootCerts: readFileSync('/path/to/ca.pem'),
+  },
+});
+```
+
+### mTLS (Mutual TLS)
+
+To present a client certificate for mTLS authentication:
+
+```typescript
+import { readFileSync } from 'node:fs';
+
+const client = new ConfigClient('production:9090', {
+  tls: {
+    rootCerts: readFileSync('/path/to/ca.pem'),
+    privateKey: readFileSync('/path/to/client.key'),
+    certChain: readFileSync('/path/to/client.crt'),
+  },
+});
+```
+
+`rootCerts`, `privateKey`, and `certChain` are all optional. Omit
+`rootCerts` to use the system store while still sending a client cert.
+
+### TlsOptions
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `rootCerts` | `Buffer` | PEM-encoded root CA certificate(s). Overrides the system store |
+| `privateKey` | `Buffer` | PEM-encoded client private key for mTLS |
+| `certChain` | `Buffer` | PEM-encoded client certificate chain for mTLS |
 
 ## Retry
 
