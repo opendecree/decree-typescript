@@ -17,16 +17,22 @@ export { convertValue, typedValueToString } from "./convert.js";
 // Error hierarchy
 export {
 	AlreadyExistsError,
+	CancelledError,
 	ChecksumMismatchError,
+	DataLossError,
+	DeadlineExceededError,
 	DecreeError,
 	IncompatibleServerError,
 	InvalidArgumentError,
 	LockedError,
 	mapGrpcError,
 	NotFoundError,
+	OutOfRangeError,
 	PermissionDeniedError,
+	ResourceExhaustedError,
 	TypeMismatchError,
 	UnavailableError,
+	UnimplementedError,
 } from "./errors.js";
 // Utilities (re-export for advanced users)
 export { withRetry } from "./retry.js";
