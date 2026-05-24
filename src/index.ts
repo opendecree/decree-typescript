@@ -44,6 +44,7 @@ export type {
 	RetryConfig,
 	ServerInfo,
 	ServerVersion,
+	TlsOptions,
 } from "./types.js";
 // Watcher
 export { ConfigWatcher, WatchedField } from "./watcher.js";
