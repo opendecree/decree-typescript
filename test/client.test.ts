@@ -322,6 +322,27 @@ describe("ConfigClient", () => {
 			await expect(client.serverInfo).rejects.toThrow(UnavailableError);
 		});
 
+		it("clears cached promise on rejection so callers can retry", async () => {
+			serverStub.getServerInfo
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(makeServiceError(status.UNAVAILABLE, "server down"));
+					},
+				)
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(null, { version: "0.9.0", commit: "def456", features: {} });
+					},
+				);
+
+			await expect(client.serverInfo).rejects.toThrow(UnavailableError);
+			// allow the .catch cleanup to run
+			await Promise.resolve();
+			const info = await client.serverInfo;
+			expect(info.version).toBe("0.9.0");
+			expect(serverStub.getServerInfo).toHaveBeenCalledTimes(2);
+		});
+
 		it("exposes deprecated serverVersion alias", async () => {
 			serverStub.getServerInfo.mockImplementation(
 				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
