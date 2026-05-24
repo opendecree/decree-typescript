@@ -247,11 +247,21 @@ export class ConfigClient {
 		tenantId: string,
 		fieldPath: string,
 		value: string,
-		options?: { timeout?: number; idempotencyKey?: string; signal?: AbortSignal },
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
 	): Promise<void> {
 		const fn = async () => {
 			await this.callSetField(
-				{ tenantId, fieldPath, value: { stringValue: value } },
+				{
+					tenantId,
+					fieldPath,
+					value: { stringValue: value },
+					expectedChecksum: options?.expectedChecksum,
+				},
 				options?.timeout,
 				options?.signal,
 			);
@@ -267,7 +277,8 @@ export class ConfigClient {
 	 * Atomically set multiple config values.
 	 *
 	 * @param values - Record mapping field paths to string values.
-	 * @param options - Optional description for the audit log and idempotency key for safe DEADLINE_EXCEEDED retries.
+	 * @param options - Optional description for the audit log, idempotency key for safe DEADLINE_EXCEEDED retries,
+	 *   and per-field expected checksums for optimistic concurrency control.
 	 */
 	async setMany(
 		tenantId: string,
@@ -277,12 +288,14 @@ export class ConfigClient {
 			timeout?: number;
 			idempotencyKey?: string;
 			signal?: AbortSignal;
+			expectedChecksums?: Record<string, string>;
 		},
 	): Promise<void> {
 		const fn = async () => {
 			const updates = Object.entries(values).map(([fieldPath, v]) => ({
 				fieldPath,
 				value: { stringValue: v },
+				expectedChecksum: options?.expectedChecksums?.[fieldPath],
 			}));
 			await this.callSetFields(
 				{ tenantId, updates, description: options?.description },
@@ -303,11 +316,16 @@ export class ConfigClient {
 	async setNull(
 		tenantId: string,
 		fieldPath: string,
-		options?: { timeout?: number; idempotencyKey?: string; signal?: AbortSignal },
+		options?: {
+			timeout?: number;
+			idempotencyKey?: string;
+			signal?: AbortSignal;
+			expectedChecksum?: string;
+		},
 	): Promise<void> {
 		const fn = async () => {
 			await this.callSetField(
-				{ tenantId, fieldPath, value: undefined },
+				{ tenantId, fieldPath, value: undefined, expectedChecksum: options?.expectedChecksum },
 				options?.timeout,
 				options?.signal,
 			);
