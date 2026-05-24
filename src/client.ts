@@ -100,6 +100,9 @@ export class ConfigClient {
 	get serverInfo(): Promise<ServerInfo> {
 		if (this.serverInfoPromise === undefined) {
 			this.serverInfoPromise = this.fetchServerInfo();
+			this.serverInfoPromise.catch(() => {
+				this.serverInfoPromise = undefined;
+			});
 		}
 		return this.serverInfoPromise;
 	}
