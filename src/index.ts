@@ -4,8 +4,7 @@
  * @packageDocumentation
  */
 
-export { VERSION } from "./version.js";
-export const SUPPORTED_SERVER_VERSION = ">=0.8.0,<1.0.0";
+export { SUPPORTED_SERVER_VERSION, VERSION } from "./version.js";
 export const PROTO_VERSION = "v1";
 
 export { createChannel } from "./channel.js";
