@@ -45,5 +45,6 @@ export type {
 	ServerVersion,
 	TlsOptions,
 } from "./types.js";
+export type { ConfigWatcherEvents } from "./watcher.js";
 // Watcher
 export { ConfigWatcher, WatchedField } from "./watcher.js";

@@ -695,6 +695,51 @@ describe("ConfigWatcher", () => {
 			expect(configStub.subscribe).toHaveBeenCalledTimes(1);
 		});
 
+		it("emits subscriptionError for retryable errors", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			const errors: Error[] = [];
+			watcher.on("subscriptionError", (err) => errors.push(err));
+
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "server unavailable"));
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toBe("server unavailable");
+
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
+		it("emits subscriptionError for non-retryable errors", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			const errors: Error[] = [];
+			watcher.on("subscriptionError", (err) => errors.push(err));
+
+			await watcher.start();
+
+			mockStream.emit("error", makeServiceError(status.PERMISSION_DENIED, "access denied"));
+
+			await new Promise((r) => setTimeout(r, 10));
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toBe("access denied");
+		});
+
 		it("reconnects on stream end", async () => {
 			vi.useFakeTimers();
 
