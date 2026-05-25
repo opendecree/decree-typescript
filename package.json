@@ -24,13 +24,14 @@
     "gen-version": "node scripts/gen-version.mjs",
     "check:version": "node scripts/gen-version.mjs --check",
     "build": "node scripts/gen-version.mjs && tsc",
-    "lint": "biome check src/ test/",
-    "format": "biome format --write src/ test/",
+    "lint": "biome check src/ test/ integration/",
+    "format": "biome format --write src/ test/ integration/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "pre-commit": "biome check src/ test/ && tsc --noEmit && vitest run",
+    "test:integration": "DECREE_INTEGRATION=1 vitest run --project integration",
+    "pre-commit": "biome check src/ test/ integration/ && tsc --noEmit && vitest run",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

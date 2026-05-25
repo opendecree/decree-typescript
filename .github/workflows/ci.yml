@@ -1,12 +1,16 @@
 # CI pipeline for the OpenDecree TypeScript SDK.
 #
-# Jobs: lint, typecheck, test (matrix: Node 20/22/24), examples → check (alls-green gate)
+# Jobs: lint, typecheck, test (matrix: Node 20/22/24), examples, integration → check (alls-green gate)
 # The check job aggregates all results for branch protection.
 #
 # The first job defines YAML anchors (&checkout, &setup-node-22, &install)
 # on its setup steps; subsequent jobs alias them to avoid repetition.
 # The test job uses its own setup-node step because the matrix node-version
 # varies per run.
+#
+# The integration job checks out the decree server repo, builds the server
+# and tools images, then runs the Vitest integration suite against a
+# docker-compose stack (postgres + redis + decree).
 
 name: CI
 
@@ -97,10 +101,77 @@ jobs:
       - name: Typecheck examples
         run: cd examples && npx tsc --noEmit
 
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - *checkout
+      - *setup-node-22
+      - *install
+
+      - name: Checkout decree server
+        uses: actions/checkout@v6
+        with:
+          repository: opendecree/decree
+          path: _decree
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker-container
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build tools image
+        uses: docker/build-push-action@v7
+        with:
+          context: _decree
+          file: _decree/build/Dockerfile.tools
+          load: true
+          tags: decree-tools
+          cache-from: type=registry,ref=ghcr.io/opendecree/decree-tools:buildcache
+          cache-to: type=local,dest=/tmp/.buildx-cache-tools,mode=max
+
+      - name: Build server image
+        uses: docker/build-push-action@v7
+        with:
+          context: _decree
+          file: _decree/build/Dockerfile
+          load: true
+          tags: decree-server
+          cache-from: type=registry,ref=ghcr.io/opendecree/decree:buildcache
+          cache-to: type=local,dest=/tmp/.buildx-cache-server,mode=max
+
+      - name: Start decree stack
+        run: docker compose up -d --wait service
+        env:
+          DECREE_SRC: _decree
+          TOOLS_IMAGE: decree-tools
+          SERVICE_IMAGE: decree-server
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Tear down decree stack
+        if: always()
+        run: docker compose down -v
+        env:
+          DECREE_SRC: _decree
+
   check:
     name: CI check
     if: always()
-    needs: [lint, typecheck, test, examples, version]
+    needs: [lint, typecheck, test, examples, version, integration]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
