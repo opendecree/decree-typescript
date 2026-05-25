@@ -53,7 +53,7 @@
     "url": "https://github.com/opendecree/decree-typescript/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.12.0"
