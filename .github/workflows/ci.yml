@@ -96,8 +96,10 @@ jobs:
       - *setup-node-22
       - name: Install SDK dependencies
         run: npm ci
+      - name: Build SDK
+        run: npm run build
       - name: Install example dependencies
-        run: cd examples && npm install
+        run: cd examples && npm ci
       - name: Typecheck examples
         run: cd examples && npx tsc --noEmit
 

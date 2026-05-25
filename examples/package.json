@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@opendecree/sdk": "file:../"
+  },
+  "devDependencies": {
+    "@types/node": ">=20"
   }
 }
