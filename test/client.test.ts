@@ -828,6 +828,61 @@ describe("ConfigClient", () => {
 			});
 			tenantClient.close();
 		});
+
+		describe("setToken()", () => {
+			it("subsequent RPCs use the new Bearer token", async () => {
+				client.setToken("rotated-token");
+
+				configStub.getField.mockImplementation(
+					(_req: unknown, meta: Metadata, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						expect(meta.get("authorization")).toEqual(["Bearer rotated-token"]);
+						cb(null, {
+							value: { fieldPath: "a", value: { stringValue: "v" }, checksum: "c" },
+						});
+					},
+				);
+
+				await client.get("tenant-1", "a");
+			});
+
+			it("clears metadata headers when switching from header-mode to token-mode", async () => {
+				client.setToken("jwt-abc");
+
+				configStub.getField.mockImplementation(
+					(_req: unknown, meta: Metadata, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						expect(meta.get("x-subject")).toEqual([]);
+						expect(meta.get("x-role")).toEqual([]);
+						expect(meta.get("authorization")).toEqual(["Bearer jwt-abc"]);
+						cb(null, {
+							value: { fieldPath: "a", value: { stringValue: "v" }, checksum: "c" },
+						});
+					},
+				);
+
+				await client.get("tenant-1", "a");
+			});
+
+			it("rotates token on a token-mode client", async () => {
+				const tokenClient = new ConfigClient("localhost:9090", {
+					token: "initial-token",
+					retry: false,
+				});
+
+				tokenClient.setToken("refreshed-token");
+
+				configStub.getField.mockImplementation(
+					(_req: unknown, meta: Metadata, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						expect(meta.get("authorization")).toEqual(["Bearer refreshed-token"]);
+						cb(null, {
+							value: { fieldPath: "a", value: { stringValue: "v" }, checksum: "c" },
+						});
+					},
+				);
+
+				await tokenClient.get("tenant-1", "a");
+				tokenClient.close();
+			});
+		});
 	});
 
 	describe("AbortSignal", () => {
