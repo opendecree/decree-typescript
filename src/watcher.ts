@@ -11,7 +11,7 @@ import { EventEmitter } from "node:events";
 import { type ClientReadableStream, type Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import type { Converter } from "./convert.js";
 import { convertValue, typedValueToString } from "./convert.js";
-import { DecreeError, TypeMismatchError, mapGrpcError } from "./errors.js";
+import { DecreeError, mapGrpcError, TypeMismatchError } from "./errors.js";
 import type {
 	GetConfigRequest,
 	GetConfigResponse,
