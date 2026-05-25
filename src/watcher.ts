@@ -11,7 +11,7 @@ import { EventEmitter } from "node:events";
 import { type ClientReadableStream, type Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import type { Converter } from "./convert.js";
 import { convertValue, typedValueToString } from "./convert.js";
-import { DecreeError, mapGrpcError } from "./errors.js";
+import { DecreeError, mapGrpcError, TypeMismatchError } from "./errors.js";
 import type {
 	GetConfigRequest,
 	GetConfigResponse,
@@ -159,6 +159,10 @@ export class WatchedField<T> extends EventEmitter {
 	/**
 	 * Load the initial value from a GetConfig snapshot.
 	 *
+	 * If `convertValue` throws (e.g. type mismatch or unsupported converter),
+	 * the field falls back to its default value and emits a `'conversionError'` event.
+	 * The error is non-fatal — the stream continues.
+	 *
 	 * @param rawValue - The raw string value from the snapshot, or null if absent.
 	 * @internal
 	 */
@@ -166,7 +170,19 @@ export class WatchedField<T> extends EventEmitter {
 		if (rawValue === null) {
 			this.currentValue = this.defaultValue;
 		} else {
-			this.currentValue = convertValue(rawValue, this.converter) as T;
+			try {
+				this.currentValue = convertValue(rawValue, this.converter) as T;
+			} catch (err) {
+				console.warn(
+					`[decree] convertValue failed for field "${this.path}" (value=${JSON.stringify(rawValue)}): ${err instanceof Error ? err.message : String(err)}`,
+				);
+				this.currentValue = this.defaultValue;
+				const decreeErr =
+					err instanceof DecreeError
+						? err
+						: new TypeMismatchError(err instanceof Error ? err.message : String(err));
+				this.emit("conversionError", decreeErr, rawValue);
+			}
 		}
 	}
 
@@ -175,6 +191,10 @@ export class WatchedField<T> extends EventEmitter {
 	 *
 	 * Emits a `'change'` event if the new value differs from the current value.
 	 * Enqueues a Change for async iteration.
+	 *
+	 * If `convertValue` throws (e.g. type mismatch or unsupported converter),
+	 * the field retains its current value, emits a `'conversionError'` event,
+	 * and returns without updating. The stream continues processing other fields.
 	 *
 	 * @param rawValue - The new raw string value, or null if set to null.
 	 * @param change - The Change object describing this update.
@@ -185,7 +205,19 @@ export class WatchedField<T> extends EventEmitter {
 		if (rawValue === null) {
 			this.currentValue = this.defaultValue;
 		} else {
-			this.currentValue = convertValue(rawValue, this.converter) as T;
+			try {
+				this.currentValue = convertValue(rawValue, this.converter) as T;
+			} catch (err) {
+				console.warn(
+					`[decree] convertValue failed for field "${this.path}" (value=${JSON.stringify(rawValue)}): ${err instanceof Error ? err.message : String(err)}`,
+				);
+				const decreeErr =
+					err instanceof DecreeError
+						? err
+						: new TypeMismatchError(err instanceof Error ? err.message : String(err));
+				this.emit("conversionError", decreeErr, rawValue);
+				return;
+			}
 		}
 
 		// Only emit if the value actually changed.
@@ -221,6 +253,25 @@ export class WatchedField<T> extends EventEmitter {
 			resolve({ done: true, value: undefined });
 		}
 	}
+}
+
+/**
+ * Typed event map for WatchedField.
+ */
+export interface WatchedFieldEvents {
+	/**
+	 * Emitted when the field value changes.
+	 *
+	 * Arguments are the old value and the new value.
+	 */
+	change: [oldValue: unknown, newValue: unknown];
+	/**
+	 * Emitted when `convertValue` throws during `_loadInitial` or `_update`.
+	 *
+	 * The field retains its previous value (or default for `_loadInitial`).
+	 * The gRPC stream continues — this error is non-fatal.
+	 */
+	conversionError: [err: DecreeError, rawValue: string];
 }
 
 /**

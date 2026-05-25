@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
-import { DecreeError } from "../src/errors.js";
+import { DecreeError, TypeMismatchError } from "../src/errors.js";
 import type { Change } from "../src/types.js";
 import { ConfigWatcher, WatchedField } from "../src/watcher.js";
 
@@ -281,6 +281,72 @@ describe("WatchedField", () => {
 			await iterPromise;
 			expect(changes).toHaveLength(3);
 			expect(field.droppedChanges).toBe(0);
+		});
+	});
+
+	describe("conversionError handling", () => {
+		it("falls back to default and emits conversionError when _loadInitial value is unconvertible", () => {
+			const field = new WatchedField("payments.fee", Number, { default: 0.01 });
+
+			const errors: Array<{ err: DecreeError; raw: string }> = [];
+			field.on("conversionError", (err, raw) => errors.push({ err, raw }));
+
+			field._loadInitial("not-a-number");
+
+			expect(field.value).toBe(0.01);
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.err).toBeInstanceOf(TypeMismatchError);
+			expect(errors[0]?.raw).toBe("not-a-number");
+		});
+
+		it("retains current value and emits conversionError when _update value is unconvertible (type-flip)", () => {
+			const field = new WatchedField("payments.fee", Number, { default: 0.01 });
+			field._loadInitial("0.05");
+			expect(field.value).toBe(0.05);
+
+			const errors: Array<{ err: DecreeError; raw: string }> = [];
+			field.on("conversionError", (err, raw) => errors.push({ err, raw }));
+
+			const changeHandler = vi.fn();
+			field.on("change", changeHandler);
+
+			const change: Change = {
+				fieldPath: "payments.fee",
+				oldValue: "0.05",
+				newValue: "not-a-number",
+				version: 2,
+				changedBy: "admin",
+			};
+			field._update("not-a-number", change);
+
+			// Value must be retained, not overwritten.
+			expect(field.value).toBe(0.05);
+			// No change event should fire.
+			expect(changeHandler).not.toHaveBeenCalled();
+			// conversionError must be emitted.
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.err).toBeInstanceOf(TypeMismatchError);
+			expect(errors[0]?.raw).toBe("not-a-number");
+		});
+
+		it("does not fire change event after a failed conversion in _update", () => {
+			const field = new WatchedField("feature.enabled", Boolean, { default: false });
+			field._loadInitial("true");
+
+			const changeHandler = vi.fn();
+			field.on("change", changeHandler);
+
+			const change: Change = {
+				fieldPath: "feature.enabled",
+				oldValue: "true",
+				newValue: "maybe",
+				version: 2,
+				changedBy: "admin",
+			};
+			field._update("maybe", change);
+
+			expect(field.value).toBe(true);
+			expect(changeHandler).not.toHaveBeenCalled();
 		});
 	});
 });
@@ -613,6 +679,98 @@ describe("ConfigWatcher", () => {
 
 			// Should reset to default.
 			expect(fee.value).toBe(0.01);
+
+			await watcher.stop();
+		});
+
+		it("does not crash the stream when convertValue throws (type-flip mid-stream)", async () => {
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([{ fieldPath: "payments.fee", value: { numberValue: 0.05 } }]);
+
+			const conversionErrors: Array<DecreeError> = [];
+			fee.on("conversionError", (err) => conversionErrors.push(err));
+
+			await watcher.start();
+
+			// Simulate server flipping the field type to a non-numeric string.
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 2,
+					fieldPath: "payments.fee",
+					oldValue: { numberValue: 0.05 },
+					newValue: { stringValue: "not-a-number" },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			// Value must remain at last good value (0.05).
+			expect(fee.value).toBe(0.05);
+			// conversionError must have been emitted.
+			expect(conversionErrors).toHaveLength(1);
+			expect(conversionErrors[0]).toBeInstanceOf(TypeMismatchError);
+
+			// Stream must still be alive — subsequent valid update must apply.
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 3,
+					fieldPath: "payments.fee",
+					oldValue: { numberValue: 0.05 },
+					newValue: { numberValue: 0.99 },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			expect(fee.value).toBe(0.99);
+
+			await watcher.stop();
+		});
+
+		it("continues processing other fields after one field has a conversion error", async () => {
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+			const label = watcher.field("payments.label", String, { default: "default" });
+
+			mockGetConfigSuccess([
+				{ fieldPath: "payments.fee", value: { numberValue: 0.05 } },
+				{ fieldPath: "payments.label", value: { stringValue: "original" } },
+			]);
+
+			await watcher.start();
+
+			// Bad update for fee (type-flip).
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 2,
+					fieldPath: "payments.fee",
+					oldValue: { numberValue: 0.05 },
+					newValue: { stringValue: "bad" },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			// Good update for label — must still apply.
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 3,
+					fieldPath: "payments.label",
+					oldValue: { stringValue: "original" },
+					newValue: { stringValue: "updated" },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			expect(fee.value).toBe(0.05); // unchanged due to conversion error
+			expect(label.value).toBe("updated"); // updated successfully
 
 			await watcher.stop();
 		});
