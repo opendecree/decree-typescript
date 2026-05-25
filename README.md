@@ -14,7 +14,7 @@ TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-
 
 ## Requirements
 
-- Node.js **≥ 20** (ESM-only package — CommonJS is not supported)
+- Node.js **≥ 22** (ESM-only package — CommonJS is not supported)
 
 ## Install
 
@@ -105,7 +105,7 @@ Runnable examples in the [`examples/`](examples/) directory:
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+
 - A running OpenDecree server (v0.8.0 – v0.x, pre-1.0)
 
 ## Questions?

@@ -1,6 +1,6 @@
 # CI pipeline for the OpenDecree TypeScript SDK.
 #
-# Jobs: lint, typecheck, test (matrix: Node 20/22/24), examples, integration → check (alls-green gate)
+# Jobs: lint, typecheck, test (matrix: Node 22/24), examples, integration → check (alls-green gate)
 # The check job aggregates all results for branch protection.
 #
 # The first job defines YAML anchors (&checkout, &setup-node-22, &install)
@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["20", "22", "24"]
+        node-version: ["22", "24"]
     steps:
       - *checkout
       - name: Set up Node.js ${{ matrix.node-version }}
