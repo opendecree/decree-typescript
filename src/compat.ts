@@ -5,7 +5,7 @@
  */
 
 import { IncompatibleServerError } from "./errors.js";
-import { SUPPORTED_SERVER_VERSION } from "./index.js";
+import { SUPPORTED_SERVER_VERSION } from "./version.js";
 
 /**
  * Parse a semver-like version string into an array of numbers.
