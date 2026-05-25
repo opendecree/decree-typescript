@@ -695,6 +695,94 @@ describe("ConfigWatcher", () => {
 			expect(configStub.subscribe).toHaveBeenCalledTimes(1);
 		});
 
+		it("emits subscriptionError for retryable errors", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			const errors: Error[] = [];
+			watcher.on("subscriptionError", (err) => errors.push(err));
+
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "server unavailable"));
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toBe("server unavailable");
+
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
+		it("emits subscriptionError for non-retryable errors", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			const errors: Error[] = [];
+			watcher.on("subscriptionError", (err) => errors.push(err));
+
+			await watcher.start();
+
+			mockStream.emit("error", makeServiceError(status.PERMISSION_DENIED, "access denied"));
+
+			await new Promise((r) => setTimeout(r, 10));
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toBe("access denied");
+		});
+
+		it("once listener fires only for the first subscriptionError", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			const errors: Error[] = [];
+			watcher.once("subscriptionError", (err) => errors.push(err));
+
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+
+			// First error fires the once listener.
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "first error"));
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// Second error on the new stream should NOT fire the once listener again.
+			const newStream2 = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream2);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+			newStream.emit("error", makeServiceError(status.UNAVAILABLE, "second error"));
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.message).toBe("first error");
+
+			newStream2.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
 		it("reconnects on stream end", async () => {
 			vi.useFakeTimers();
 

@@ -224,12 +224,37 @@ export class WatchedField<T> extends EventEmitter {
 }
 
 /**
+ * Typed event map for ConfigWatcher.
+ *
+ * @example
+ * ```ts
+ * watcher.on('subscriptionError', (err) => {
+ *   console.warn('subscription error:', err.message);
+ * });
+ * ```
+ */
+export interface ConfigWatcherEvents {
+	/**
+	 * Emitted when a subscription error occurs.
+	 *
+	 * For retryable errors (UNAVAILABLE, INTERNAL) the watcher reconnects automatically.
+	 * For non-retryable errors the watcher stops after emitting this event.
+	 * The `err` argument is a typed `DecreeError` (e.g. `UnavailableError`).
+	 */
+	subscriptionError: [err: DecreeError];
+}
+
+/**
  * ConfigWatcher subscribes to live configuration changes for a tenant.
  *
  * Created via `client.watch(tenantId)`. Register fields with `field()` before
  * calling `start()`. The watcher loads an initial snapshot via GetConfig, then
  * opens a Subscribe stream for real-time updates. On transient errors
  * (UNAVAILABLE, INTERNAL), it automatically reconnects with exponential backoff.
+ *
+ * Subscription errors (both retryable and fatal) are emitted as `'subscriptionError'`
+ * events. Retryable errors trigger automatic reconnection; fatal errors cause the
+ * watcher to stop.
  *
  * @example
  * ```ts
@@ -238,6 +263,10 @@ export class WatchedField<T> extends EventEmitter {
  *
  * const fee = watcher.field('payments.fee', Number, { default: 0.01 });
  * const enabled = watcher.field('payments.enabled', Boolean, { default: false });
+ *
+ * watcher.on('subscriptionError', (err) => {
+ *   console.warn('watcher error:', err.message);
+ * });
  *
  * await watcher.start();
  * console.log(fee.value); // current value from server
@@ -251,7 +280,7 @@ export class WatchedField<T> extends EventEmitter {
  * client.close();
  * ```
  */
-export class ConfigWatcher {
+export class ConfigWatcher extends EventEmitter {
 	private readonly configStub: InstanceType<typeof GrpcConfigServiceClient>;
 	private readonly metadata: Metadata;
 	private readonly timeout: number;
@@ -269,10 +298,35 @@ export class ConfigWatcher {
 		timeout: number,
 		tenantId: string,
 	) {
+		super();
 		this.configStub = configStub;
 		this.metadata = metadata;
 		this.timeout = timeout;
 		this.tenantId = tenantId;
+	}
+
+	on<K extends keyof ConfigWatcherEvents>(
+		event: K,
+		listener: (...args: ConfigWatcherEvents[K]) => void,
+	): this;
+	on(event: string | symbol, listener: (...args: unknown[]) => void): this;
+	on(event: string | symbol, listener: (...args: unknown[]) => void): this {
+		return super.on(event, listener);
+	}
+
+	once<K extends keyof ConfigWatcherEvents>(
+		event: K,
+		listener: (...args: ConfigWatcherEvents[K]) => void,
+	): this;
+	once(event: string | symbol, listener: (...args: unknown[]) => void): this;
+	once(event: string | symbol, listener: (...args: unknown[]) => void): this {
+		return super.once(event, listener);
+	}
+
+	emit<K extends keyof ConfigWatcherEvents>(event: K, ...args: ConfigWatcherEvents[K]): boolean;
+	emit(event: string | symbol, ...args: unknown[]): boolean;
+	emit(event: string | symbol, ...args: unknown[]): boolean {
+		return super.emit(event, ...args);
 	}
 
 	/**
@@ -414,10 +468,11 @@ export class ConfigWatcher {
 				return;
 			}
 
+			this.emit("subscriptionError", mapGrpcError(err));
+
 			if (isRetryableError(err)) {
 				this.scheduleReconnect(backoff);
 			} else {
-				// Non-retryable error: stop the watcher.
 				void this.stop();
 			}
 		});
