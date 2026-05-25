@@ -1,12 +1,10 @@
-import { defineProject } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
-const active = process.env.DECREE_INTEGRATION === "1";
-
-export default defineProject({
+export default defineConfig({
 	test: {
 		name: "integration",
-		include: active ? ["./integration/suite.test.ts"] : [],
-		globalSetup: active ? ["./integration/setup.ts"] : [],
+		include: ["./suite.test.ts"],
+		globalSetup: ["./setup.ts"],
 		testTimeout: 30_000,
 		hookTimeout: 30_000,
 	},
