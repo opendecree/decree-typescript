@@ -222,7 +222,7 @@ export class ConfigClient {
 	 *
 	 * @returns A record mapping field paths to their string values.
 	 */
-	async getAll(
+	getAll(
 		tenantId: string,
 		options?: { timeout?: number; signal?: AbortSignal },
 	): Promise<Record<string, string>> {
@@ -250,7 +250,7 @@ export class ConfigClient {
 	 * coerces it to the schema-defined type. For type-safe writes, prefer
 	 * setNumber(), setBool(), setTime(), or setDuration().
 	 */
-	async set(
+	set(
 		tenantId: string,
 		fieldPath: string,
 		value: string,
@@ -281,7 +281,7 @@ export class ConfigClient {
 	}
 
 	/** Set a numeric config value. Sends the native number as a proto numberValue. */
-	async setNumber(
+	setNumber(
 		tenantId: string,
 		fieldPath: string,
 		value: number,
@@ -296,7 +296,7 @@ export class ConfigClient {
 	}
 
 	/** Set a boolean config value. Sends the native boolean as a proto boolValue. */
-	async setBool(
+	setBool(
 		tenantId: string,
 		fieldPath: string,
 		value: boolean,
@@ -311,7 +311,7 @@ export class ConfigClient {
 	}
 
 	/** Set a timestamp config value. Sends the Date as a proto timeValue. */
-	async setTime(
+	setTime(
 		tenantId: string,
 		fieldPath: string,
 		value: Date,
@@ -329,7 +329,7 @@ export class ConfigClient {
 	 * Set a duration config value. The value must be a duration string
 	 * (e.g. "1h30m", "300s") — the server parses and validates the format.
 	 */
-	async setDuration(
+	setDuration(
 		tenantId: string,
 		fieldPath: string,
 		value: string,
@@ -350,7 +350,7 @@ export class ConfigClient {
 	 * @param options - Optional description for the audit log, idempotency key for safe DEADLINE_EXCEEDED retries,
 	 *   and per-field expected checksums for optimistic concurrency control.
 	 */
-	async setMany(
+	setMany(
 		tenantId: string,
 		values: Record<string, SetValue>,
 		options?: {
@@ -383,7 +383,7 @@ export class ConfigClient {
 	/**
 	 * Set a config field to null.
 	 */
-	async setNull(
+	setNull(
 		tenantId: string,
 		fieldPath: string,
 		options?: {
@@ -462,13 +462,14 @@ export class ConfigClient {
 	/**
 	 * Async dispose pattern support — use with `await using`.
 	 */
-	async [Symbol.asyncDispose](): Promise<void> {
+	[Symbol.asyncDispose](): Promise<void> {
 		this.close();
+		return Promise.resolve();
 	}
 
 	// --- Private helpers ---
 
-	private async setTyped(
+	private setTyped(
 		tenantId: string,
 		fieldPath: string,
 		value: SetValue,
