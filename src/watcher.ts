@@ -389,9 +389,9 @@ export class ConfigWatcher extends EventEmitter {
 	 * Safe to call multiple times. After stopping, registered WatchedField
 	 * async iterators will complete.
 	 */
-	async stop(): Promise<void> {
+	stop(): Promise<void> {
 		if (this.stopped) {
-			return;
+			return Promise.resolve();
 		}
 		this.stopped = true;
 
@@ -408,6 +408,7 @@ export class ConfigWatcher extends EventEmitter {
 		for (const field of this.fields.values()) {
 			field._stop();
 		}
+		return Promise.resolve();
 	}
 
 	/**

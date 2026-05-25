@@ -645,6 +645,7 @@ describe("ConfigClient", () => {
 		});
 
 		it("works with await using", async () => {
+			// biome-ignore lint/suspicious/useAwait: await using satisfies the await requirement but biome doesn't recognise it yet
 			await (async () => {
 				await using c = client;
 				void c;
