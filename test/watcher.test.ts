@@ -502,6 +502,7 @@ describe("ConfigWatcher", () => {
 			watcher.field("payments.fee", Number, { default: 0.01 });
 			await watcher.start();
 
+			// biome-ignore lint/suspicious/useAwait: await using satisfies the await requirement but biome doesn't recognise it yet
 			await (async () => {
 				await using w = watcher;
 				void w;
