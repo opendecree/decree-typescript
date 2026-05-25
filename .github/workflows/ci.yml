@@ -155,7 +155,7 @@ jobs:
       - name: Start decree stack
         run: docker compose up -d --wait service
         env:
-          DECREE_SRC: _decree
+          DECREE_SRC: ./_decree
           TOOLS_IMAGE: decree-tools
           SERVICE_IMAGE: decree-server
 
@@ -166,7 +166,7 @@ jobs:
         if: always()
         run: docker compose down -v
         env:
-          DECREE_SRC: _decree
+          DECREE_SRC: ./_decree
 
   check:
     name: CI check

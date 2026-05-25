@@ -9,7 +9,8 @@
 #   DECREE_INTEGRATION=1 npm run test:integration
 #   docker compose down -v
 #
-# CI sets DECREE_SRC, TOOLS_IMAGE, and SERVICE_IMAGE via env vars before running.
+# CI sets DECREE_SRC=./_decree, TOOLS_IMAGE, and SERVICE_IMAGE via env vars before running.
+# Note: DECREE_SRC must begin with ./ or / to be treated as a bind-mount path.
 
 services:
   postgres:
