@@ -305,27 +305,30 @@ export class ConfigWatcher extends EventEmitter {
 		this.tenantId = tenantId;
 	}
 
-	on<K extends keyof ConfigWatcherEvents>(
+	override on<K extends keyof ConfigWatcherEvents>(
 		event: K,
 		listener: (...args: ConfigWatcherEvents[K]) => void,
 	): this;
-	on(event: string | symbol, listener: (...args: unknown[]) => void): this;
-	on(event: string | symbol, listener: (...args: unknown[]) => void): this {
+	override on(event: string | symbol, listener: (...args: unknown[]) => void): this;
+	override on(event: string | symbol, listener: (...args: unknown[]) => void): this {
 		return super.on(event, listener);
 	}
 
-	once<K extends keyof ConfigWatcherEvents>(
+	override once<K extends keyof ConfigWatcherEvents>(
 		event: K,
 		listener: (...args: ConfigWatcherEvents[K]) => void,
 	): this;
-	once(event: string | symbol, listener: (...args: unknown[]) => void): this;
-	once(event: string | symbol, listener: (...args: unknown[]) => void): this {
+	override once(event: string | symbol, listener: (...args: unknown[]) => void): this;
+	override once(event: string | symbol, listener: (...args: unknown[]) => void): this {
 		return super.once(event, listener);
 	}
 
-	emit<K extends keyof ConfigWatcherEvents>(event: K, ...args: ConfigWatcherEvents[K]): boolean;
-	emit(event: string | symbol, ...args: unknown[]): boolean;
-	emit(event: string | symbol, ...args: unknown[]): boolean {
+	override emit<K extends keyof ConfigWatcherEvents>(
+		event: K,
+		...args: ConfigWatcherEvents[K]
+	): boolean;
+	override emit(event: string | symbol, ...args: unknown[]): boolean;
+	override emit(event: string | symbol, ...args: unknown[]): boolean {
 		return super.emit(event, ...args);
 	}
 

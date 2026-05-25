@@ -17,7 +17,9 @@ export class DecreeError extends Error {
 	) {
 		super(message, options);
 		this.name = "DecreeError";
-		this.code = code;
+		if (code !== undefined) {
+			this.code = code;
+		}
 	}
 
 	toJSON(): Record<string, unknown> {
