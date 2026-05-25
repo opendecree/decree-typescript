@@ -1,0 +1,82 @@
+# Integration test fixture — starts a minimal decree server stack.
+#
+# Usage (local):
+#   Requires decree repo checked out at ../decree (decree-workspace layout).
+#   cd decree-typescript
+#   docker build -t decree-tools -f ../decree/build/Dockerfile.tools ../decree
+#   docker build -t decree-server -f ../decree/build/Dockerfile ../decree
+#   docker compose up -d --wait service
+#   DECREE_INTEGRATION=1 npm run test:integration
+#   docker compose down -v
+#
+# CI sets DECREE_SRC=./_decree, TOOLS_IMAGE, and SERVICE_IMAGE via env vars before running.
+# Note: DECREE_SRC must begin with ./ or / to be treated as a bind-mount path.
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: centralconfig
+      POSTGRES_USER: centralconfig
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U centralconfig"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ${TOOLS_IMAGE:-decree-tools}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${DECREE_SRC:-../decree}/db/migrations:/migrations:ro
+    command:
+      [
+        "goose",
+        "-dir",
+        "/migrations",
+        "postgres",
+        "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable",
+        "up",
+      ]
+
+  service:
+    image: ${SERVICE_IMAGE:-decree-server}
+    build:
+      context: ${DECREE_SRC:-../decree}
+      dockerfile: build/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      GRPC_PORT: "9090"
+      DB_WRITE_URL: "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable"
+      DB_READ_URL: "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable"
+      REDIS_URL: "redis://redis:6379"
+      ENABLE_SERVICES: "schema,config"
+      HTTP_PORT: "8080"
+      INSECURE_LISTEN: "1"
+      ENABLE_REFLECTION: "1"
+    ports:
+      - "9090:9090"
+      - "8080:8080"
+
+volumes:
+  pgdata:
