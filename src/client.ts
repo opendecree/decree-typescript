@@ -430,6 +430,21 @@ export class ConfigClient {
 	}
 
 	/**
+	 * Replace the bearer token used for all subsequent RPCs (including watcher reconnects).
+	 *
+	 * Switches the client to JWT auth mode: removes any metadata-header credentials
+	 * (x-subject, x-role, x-tenant-id) that may have been set at construction time.
+	 *
+	 * @param token - Raw JWT (without the "Bearer " prefix).
+	 */
+	setToken(token: string): void {
+		this.metadata.remove("x-subject");
+		this.metadata.remove("x-role");
+		this.metadata.remove("x-tenant-id");
+		this.metadata.set("authorization", `Bearer ${token}`);
+	}
+
+	/**
 	 * Close the underlying gRPC channels.
 	 */
 	close(): void {
