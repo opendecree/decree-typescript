@@ -9,6 +9,7 @@
 import { credentials, Metadata, type ServiceError } from "@grpc/grpc-js";
 import type { GlobalSetupContext } from "vitest/node";
 import { ConfigClient } from "../src/client.js";
+import { ConfigServiceClient } from "../src/generated/centralconfig/v1/config_service.js";
 import { SchemaServiceClient } from "../src/generated/centralconfig/v1/schema_service.js";
 import { FieldType } from "../src/generated/centralconfig/v1/types.js";
 
@@ -64,6 +65,8 @@ export async function setup({ provide }: GlobalSetupContext) {
 					constraints: undefined,
 					nullable: true,
 					deprecated: false,
+					examples: {},
+					tags: [],
 				},
 				{
 					path: "app.count",
@@ -71,6 +74,8 @@ export async function setup({ provide }: GlobalSetupContext) {
 					constraints: undefined,
 					nullable: false,
 					deprecated: false,
+					examples: {},
+					tags: [],
 				},
 				{
 					path: "app.enabled",
@@ -78,6 +83,8 @@ export async function setup({ provide }: GlobalSetupContext) {
 					constraints: undefined,
 					nullable: false,
 					deprecated: false,
+					examples: {},
+					tags: [],
 				},
 			],
 		},
@@ -107,10 +114,16 @@ export async function setup({ provide }: GlobalSetupContext) {
 		role: "superadmin",
 		retry: false,
 	});
+	const rawConfig = new ConfigServiceClient(serverAddr, creds);
 	await configClient.set(tenantId, "app.fee", "0.5%");
-	await configClient.setNumber(tenantId, "app.count", 42);
+	await promisify(
+		rawConfig.setField.bind(rawConfig),
+		{ tenantId, fieldPath: "app.count", value: { integerValue: 42 } },
+		meta,
+	);
 	await configClient.setBool(tenantId, "app.enabled", true);
 	configClient.close();
+	rawConfig.close();
 
 	provide("tenantId", tenantId);
 	provide("schemaId", schemaId);
