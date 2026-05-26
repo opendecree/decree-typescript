@@ -416,10 +416,135 @@ describe("ConfigWatcher", () => {
 			await watcher.start();
 
 			expect(() => watcher.field("other.field", String, { default: "" })).toThrow(
-				"cannot register fields after start()",
+				"cannot register fields after start(); use addField() instead",
 			);
 
 			await watcher.stop();
+		});
+	});
+
+	describe("addField()", () => {
+		it("works before start — returns WatchedField at default value", async () => {
+			const watcher = createWatcher();
+			const field = await watcher.addField("payments.fee", Number, { default: 0.01 });
+			expect(field).toBeInstanceOf(WatchedField);
+			expect(field.value).toBe(0.01);
+		});
+
+		it("before start — field is included when start() runs", async () => {
+			const watcher = createWatcher();
+			const fee = await watcher.addField("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([{ fieldPath: "payments.fee", value: { numberValue: 0.99 } }]);
+			await watcher.start();
+
+			expect(fee.value).toBe(0.99);
+			await watcher.stop();
+		});
+
+		it("after start — loads initial value and re-subscribes", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([{ fieldPath: "payments.fee", value: { numberValue: 0.05 } }]);
+			await watcher.start();
+
+			// New mock stream for the re-subscribe triggered by addField.
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, {
+						config: {
+							tenantId: "tenant-1",
+							version: 2,
+							values: [
+								{ fieldPath: "payments.label", value: { stringValue: "hello" }, checksum: "x" },
+							],
+						},
+					});
+				},
+			);
+
+			const label = await watcher.addField("payments.label", String, { default: "" });
+
+			expect(label.value).toBe("hello");
+			// Original stream cancelled, new one opened.
+			expect(mockStream.cancel).toHaveBeenCalledOnce();
+			expect(configStub.subscribe).toHaveBeenCalledTimes(2);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+		});
+
+		it("after start — new subscribe call includes added field path", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+
+			await watcher.addField("payments.label", String, { default: "" });
+
+			const subscribeArgs = configStub.subscribe.mock.calls[1];
+			expect(subscribeArgs?.[0]).toMatchObject({
+				tenantId: "tenant-1",
+				fieldPaths: expect.arrayContaining(["payments.fee", "payments.label"]),
+			});
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+		});
+
+		it("after start — added field receives live changes", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+
+			const label = await watcher.addField("payments.label", String, { default: "" });
+
+			newStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 3,
+					fieldPath: "payments.label",
+					oldValue: { stringValue: "" },
+					newValue: { stringValue: "updated" },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			expect(label.value).toBe("updated");
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+		});
+
+		it("throws after stop()", async () => {
+			const watcher = createWatcher();
+			mockGetConfigSuccess([]);
+			await watcher.start();
+			await watcher.stop();
+
+			await expect(watcher.addField("payments.fee", Number, { default: 0.01 })).rejects.toThrow(
+				"cannot add fields after stop()",
+			);
 		});
 	});
 
