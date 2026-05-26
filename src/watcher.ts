@@ -384,11 +384,9 @@ export class ConfigWatcher extends EventEmitter {
 	}
 
 	/**
-	 * Register a field to watch.
+	 * Register a field to watch before `start()`.
 	 *
-	 * Must be called before `start()`. Returns a WatchedField that will be
-	 * populated with the initial value from the snapshot and updated in
-	 * real-time from the Subscribe stream.
+	 * Must be called before `start()`. For post-start registration use `addField()`.
 	 *
 	 * @param path - Dot-separated field path (e.g. "payments.fee").
 	 * @param converter - Type converter: String, Number, or Boolean.
@@ -403,10 +401,56 @@ export class ConfigWatcher extends EventEmitter {
 	 */
 	field<T>(path: string, converter: Converter, options: FieldOptions<T>): WatchedField<T> {
 		if (this.started) {
-			throw new DecreeError("cannot register fields after start()");
+			throw new DecreeError("cannot register fields after start(); use addField() instead");
 		}
 		const wf = new WatchedField<T>(path, converter, options);
 		this.fields.set(path, wf as WatchedField<unknown>);
+		return wf;
+	}
+
+	/**
+	 * Register a field to watch dynamically — works both before and after `start()`.
+	 *
+	 * When called after `start()`, loads the field's initial value from a GetConfig
+	 * snapshot and re-opens the Subscribe stream with the updated field list.
+	 *
+	 * @param path - Dot-separated field path (e.g. "payments.fee").
+	 * @param converter - Type converter: String, Number, or Boolean.
+	 * @param options - Options including the default value.
+	 * @returns A WatchedField instance for this path.
+	 * @throws DecreeError if called after stop().
+	 *
+	 * @example
+	 * ```ts
+	 * await watcher.start();
+	 * const label = await watcher.addField('payments.label', String, { default: '' });
+	 * console.log(label.value);
+	 * ```
+	 */
+	async addField<T>(
+		path: string,
+		converter: Converter,
+		options: FieldOptions<T>,
+	): Promise<WatchedField<T>> {
+		if (this.stopped) {
+			throw new DecreeError("cannot add fields after stop()");
+		}
+		const wf = new WatchedField<T>(path, converter, options);
+		this.fields.set(path, wf as WatchedField<unknown>);
+
+		if (this.started) {
+			await this.loadSnapshotForFields([path]);
+			if (this.reconnectTimer !== null) {
+				clearTimeout(this.reconnectTimer);
+				this.reconnectTimer = null;
+			}
+			if (this.stream) {
+				this.stream.cancel();
+				this.stream = null;
+			}
+			this.subscribe();
+		}
+
 		return wf;
 	}
 
@@ -480,6 +524,10 @@ export class ConfigWatcher extends EventEmitter {
 	}
 
 	private async loadSnapshot(): Promise<void> {
+		await this.loadSnapshotForFields([...this.fields.keys()]);
+	}
+
+	private async loadSnapshotForFields(paths: string[]): Promise<void> {
 		const resp = await this.callGetConfig({
 			tenantId: this.tenantId,
 			includeDescriptions: false,
@@ -492,9 +540,11 @@ export class ConfigWatcher extends EventEmitter {
 			}
 		}
 
-		for (const [path, field] of this.fields) {
-			const raw = valueMap.get(path);
-			field._loadInitial(raw ?? null);
+		for (const path of paths) {
+			const field = this.fields.get(path);
+			if (field) {
+				field._loadInitial(valueMap.get(path) ?? null);
+			}
 		}
 	}
 
