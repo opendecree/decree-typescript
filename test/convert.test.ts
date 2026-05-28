@@ -93,6 +93,15 @@ describe("convertValue", () => {
 			expect(() => convertValue("yes", Boolean)).toThrow(TypeMismatchError);
 		});
 	});
+
+	it("throws TypeMismatchError for unsupported converter type (runtime guard)", () => {
+		// Line 74 is a runtime guard — TypeScript types prevent reaching it normally.
+		// Bypass via cast to exercise the branch.
+		expect(() => convertValue("value", Date as unknown as Converter)).toThrow(TypeMismatchError);
+		expect(() => convertValue("value", Date as unknown as Converter)).toThrow(
+			"unsupported converter type",
+		);
+	});
 });
 
 describe("typedValueToString", () => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 import { ConfigClient } from "../src/client.js";
 import {
 	ChecksumMismatchError,
+	DeadlineExceededError,
 	DecreeError,
 	IncompatibleServerError,
 	NotFoundError,
@@ -1002,6 +1003,162 @@ describe("ConfigClient", () => {
 				retry: false,
 			});
 			c.close();
+		});
+	});
+
+	describe("retry behavior", () => {
+		let retryClient: ConfigClient;
+
+		beforeEach(() => {
+			retryClient = new ConfigClient("localhost:9090", {
+				subject: "testuser",
+				retry: {}, // enabled, no custom retryableCodes → hits line 514
+			});
+		});
+
+		afterEach(() => {
+			retryClient.close();
+		});
+
+		it("withRetryAndMap merges defaultCodes into config when retryableCodes is unset (line 514)", async () => {
+			configStub.getField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { value: { fieldPath: "f", value: { stringValue: "v" }, checksum: "c" } });
+				},
+			);
+			const result = await retryClient.get("tenant-1", "f");
+			expect(result).toBe("v");
+		});
+	});
+
+	describe("idempotency key retry", () => {
+		let retryClient: ConfigClient;
+
+		beforeEach(() => {
+			retryClient = new ConfigClient("localhost:9090", {
+				subject: "testuser",
+				retry: { maxAttempts: 2, initialBackoff: 1 },
+			});
+		});
+
+		afterEach(() => {
+			retryClient.close();
+		});
+
+		it("set() with idempotencyKey retries DEADLINE_EXCEEDED", async () => {
+			vi.useFakeTimers();
+
+			configStub.setField
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(makeServiceError(status.DEADLINE_EXCEEDED, "timed out"));
+					},
+				)
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(null, { configVersion: { version: 1 } });
+					},
+				);
+
+			const promise = retryClient.set("tenant-1", "payments.fee", "0.5%", {
+				idempotencyKey: "idem-key-1",
+			});
+			await vi.runAllTimersAsync();
+			await promise;
+
+			expect(configStub.setField).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+		});
+
+		it("set() without idempotencyKey does NOT retry DEADLINE_EXCEEDED", async () => {
+			configStub.setField.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(makeServiceError(status.DEADLINE_EXCEEDED, "timed out"));
+				},
+			);
+
+			await expect(retryClient.set("tenant-1", "payments.fee", "0.5%")).rejects.toThrow(
+				DeadlineExceededError,
+			);
+
+			expect(configStub.setField).toHaveBeenCalledTimes(1);
+		});
+
+		it("setMany() with idempotencyKey retries DEADLINE_EXCEEDED", async () => {
+			vi.useFakeTimers();
+
+			configStub.setFields
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(makeServiceError(status.DEADLINE_EXCEEDED, "timed out"));
+					},
+				)
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(null, { configVersion: { version: 2 } });
+					},
+				);
+
+			const promise = retryClient.setMany("tenant-1", { a: "1" }, { idempotencyKey: "idem-key-2" });
+			await vi.runAllTimersAsync();
+			await promise;
+
+			expect(configStub.setFields).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+		});
+
+		it("setNull() with idempotencyKey retries DEADLINE_EXCEEDED", async () => {
+			vi.useFakeTimers();
+
+			configStub.setField
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(makeServiceError(status.DEADLINE_EXCEEDED, "timed out"));
+					},
+				)
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(null, { configVersion: { version: 3 } });
+					},
+				);
+
+			const promise = retryClient.setNull("tenant-1", "payments.fee", {
+				idempotencyKey: "idem-key-3",
+			});
+			await vi.runAllTimersAsync();
+			await promise;
+
+			expect(configStub.setField).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+		});
+
+		it("setNumber() with idempotencyKey retries DEADLINE_EXCEEDED", async () => {
+			vi.useFakeTimers();
+
+			configStub.setField
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(makeServiceError(status.DEADLINE_EXCEEDED, "timed out"));
+					},
+				)
+				.mockImplementationOnce(
+					(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+						cb(null, { configVersion: { version: 1 } });
+					},
+				);
+
+			const promise = retryClient.setNumber("tenant-1", "payments.fee", 42, {
+				idempotencyKey: "idem-key-4",
+			});
+			await vi.runAllTimersAsync();
+			await promise;
+
+			expect(configStub.setField).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
 		});
 	});
 });
