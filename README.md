@@ -24,41 +24,57 @@ npm install @opendecree/sdk
 
 ## Quick Start
 
+The SDK implements `Symbol.dispose` / `Symbol.asyncDispose`, so you can use TypeScript 5.2's `using` statement for automatic cleanup — no try/finally needed.
+
 ```typescript
 import { ConfigClient } from '@opendecree/sdk';
 
+// `using` closes the gRPC channel automatically when the block exits
+await using client = new ConfigClient('localhost:9090', { subject: 'myapp' });
+
+// Get config values (default: string)
+const fee = await client.get('tenant-id', 'payments.fee');
+
+// Typed gets via runtime converters
+const retries = await client.get('tenant-id', 'payments.retries', Number);
+const enabled = await client.get('tenant-id', 'payments.enabled', Boolean);
+
+// Nullable gets
+const optional = await client.get('tenant-id', 'payments.fee', Number, { nullable: true });
+
+// Set values
+await client.set('tenant-id', 'payments.fee', '0.5%');
+
+// Set multiple values atomically
+await client.setMany('tenant-id', {
+  'payments.fee': '0.5%',
+  'payments.retries': '3',
+});
+```
+
+<details>
+<summary>Prefer try/finally?</summary>
+
+```typescript
 const client = new ConfigClient('localhost:9090', { subject: 'myapp' });
 try {
-  // Get config values (default: string)
   const fee = await client.get('tenant-id', 'payments.fee');
-
-  // Typed gets via runtime converters
-  const retries = await client.get('tenant-id', 'payments.retries', Number);
-  const enabled = await client.get('tenant-id', 'payments.enabled', Boolean);
-
-  // Nullable gets
-  const optional = await client.get('tenant-id', 'payments.fee', Number, { nullable: true });
-
-  // Set values
-  await client.set('tenant-id', 'payments.fee', '0.5%');
-
-  // Set multiple values atomically
-  await client.setMany('tenant-id', {
-    'payments.fee': '0.5%',
-    'payments.retries': '3',
-  });
+  // ...
 } finally {
   client.close();
 }
 ```
+</details>
 
 ## Watch for Changes
+
+`ConfigWatcher` also supports `await using` for automatic stop + close:
 
 ```typescript
 import { ConfigClient } from '@opendecree/sdk';
 
-const client = new ConfigClient('localhost:9090', { subject: 'myapp' });
-const watcher = client.watch('tenant-id');
+await using client = new ConfigClient('localhost:9090', { subject: 'myapp' });
+await using watcher = client.watch('tenant-id');
 
 // Register fields before starting
 const fee = watcher.field('payments.fee', Number, { default: 0.01 });
@@ -80,10 +96,7 @@ fee.on('change', (oldVal, newVal) => {
 for await (const change of fee) {
   console.log(change.fieldPath, change.newValue);
 }
-
-// Cleanup
-await watcher.stop();
-client.close();
+// watcher.stop() + client.close() called automatically
 ```
 
 ## Examples
@@ -92,7 +105,7 @@ Runnable examples in the [`examples/`](examples/) directory:
 
 | Example | What it shows |
 |---------|--------------|
-| [quickstart](examples/quickstart/) | Type converters (`Number`, `Boolean`), try/finally |
+| [quickstart](examples/quickstart/) | `using` / `await using`, type converters (`Number`, `Boolean`) |
 | [live-config](examples/live-config/) | `ConfigWatcher`, `.on('change')`, `for await...of` |
 | [nextjs-integration](examples/nextjs-integration/) | Singleton watcher for server-side config |
 | [error-handling](examples/error-handling/) | `RetryConfig`, `{ nullable: true }`, `instanceof` narrowing |
