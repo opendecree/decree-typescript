@@ -32,7 +32,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "DECREE_INTEGRATION=1 sh -c 'cd integration && vitest run'",
     "pre-commit": "biome check src/ test/ integration/ && tsc --noEmit && vitest run",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run pre-commit && npm run build"
   },
   "keywords": [
     "config",
