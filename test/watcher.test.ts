@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { Metadata, type ServiceError, status } from "@grpc/grpc-js";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
+import * as convertModule from "../src/convert.js";
 import { DecreeError, TypeMismatchError } from "../src/errors.js";
 import type { Change } from "../src/types.js";
 import { ConfigWatcher, WatchedField } from "../src/watcher.js";
@@ -282,6 +283,45 @@ describe("WatchedField", () => {
 			expect(changes).toHaveLength(3);
 			expect(field.droppedChanges).toBe(0);
 		});
+
+		it("resolves immediately when stopped becomes true inside Promise constructor (race condition)", async () => {
+			const field = new WatchedField("payments.fee", Number, { default: 0.01 });
+
+			// Simulate the race: stopped becomes true BETWEEN the while-check at
+			// line 139 and the `if (this.stopped)` guard at line 146 (inside the
+			// Promise constructor).
+			//
+			// Mechanism: intercept the changeQueue's shift() so that when the
+			// iterator calls shift() (finding no queued item), we simultaneously
+			// set stopped=true via _stop(). Since shift() returns undefined the
+			// iterator proceeds past the `if (queued)` guard at line 141 and enters
+			// the Promise constructor. At line 146, `this.stopped` is now true, so
+			// the branch resolves immediately with {done:true}.
+			//
+			// Note: _stop() also tries to call pendingResolve, but pendingResolve
+			// is still null at this point (line 150 hasn't run yet), so the only
+			// path that resolves the promise is lines 147-148.
+			const queue = (field as unknown as { changeQueue: Change[] }).changeQueue;
+			const originalShift = queue.shift.bind(queue);
+			let intercepted = false;
+			queue.shift = () => {
+				if (!intercepted) {
+					intercepted = true;
+					field._stop();
+				}
+				return originalShift();
+			};
+
+			const changes: Change[] = [];
+			const iterPromise = (async () => {
+				for await (const change of field) {
+					changes.push(change);
+				}
+			})();
+
+			await iterPromise;
+			expect(changes).toHaveLength(0);
+		});
 	});
 
 	describe("conversionError handling", () => {
@@ -347,6 +387,54 @@ describe("WatchedField", () => {
 
 			expect(field.value).toBe(true);
 			expect(changeHandler).not.toHaveBeenCalled();
+		});
+
+		it("_loadInitial wraps non-DecreeError in TypeMismatchError", () => {
+			// convertValue is mocked to throw a plain Error (not DecreeError)
+			// This exercises the false branch of `err instanceof DecreeError`
+			vi.spyOn(convertModule, "convertValue").mockImplementationOnce(() => {
+				throw new Error("plain error from converter");
+			});
+
+			const field = new WatchedField("f", Number, { default: 0 });
+			const errors: Array<{ err: DecreeError; raw: string }> = [];
+			field.on("conversionError", (err, raw) => errors.push({ err, raw }));
+
+			field._loadInitial("some-value");
+
+			expect(field.value).toBe(0); // default retained
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.err).toBeInstanceOf(TypeMismatchError);
+			expect(errors[0]?.err.message).toBe("plain error from converter");
+		});
+
+		it("_update wraps non-DecreeError in TypeMismatchError", () => {
+			const field = new WatchedField("f", Number, { default: 0 });
+			field._loadInitial("1"); // valid initial
+
+			vi.spyOn(convertModule, "convertValue").mockImplementationOnce(() => {
+				throw new Error("plain conversion error");
+			});
+
+			const errors: Array<{ err: DecreeError; raw: string }> = [];
+			field.on("conversionError", (err, raw) => errors.push({ err, raw }));
+			const changeHandler = vi.fn();
+			field.on("change", changeHandler);
+
+			const change: Change = {
+				fieldPath: "f",
+				oldValue: "1",
+				newValue: "bad",
+				version: 2,
+				changedBy: "admin",
+			};
+			field._update("bad", change);
+
+			expect(field.value).toBe(1); // value retained
+			expect(changeHandler).not.toHaveBeenCalled();
+			expect(errors).toHaveLength(1);
+			expect(errors[0]?.err).toBeInstanceOf(TypeMismatchError);
+			expect(errors[0]?.err.message).toBe("plain conversion error");
 		});
 	});
 });
@@ -502,6 +590,43 @@ describe("ConfigWatcher", () => {
 			await watcher.stop();
 		});
 
+		it("cancels pending reconnect timer when addField() is called during backoff", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			// Trigger a retryable error → schedules reconnect timer
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "temp down"));
+
+			// Set up mocks for the re-subscribe triggered by addField()
+			const newStream = createMockStream();
+			configStub.subscribe.mockReturnValue(newStream);
+			configStub.getConfig.mockImplementationOnce(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: { tenantId: "tenant-1", version: 2, values: [] } });
+				},
+			);
+
+			// addField() while reconnect timer is pending → clears the timer (lines 444-445)
+			// and immediately re-subscribes
+			const label = await watcher.addField("payments.label", String, { default: "" });
+			expect(label).toBeInstanceOf(WatchedField);
+
+			// The reconnect timer was cleared; addField triggered a fresh subscribe instead
+			// Advance past the max backoff — no extra subscribe from the timer
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// 1 from start + 1 from addField = 2 (no extra from the reconnect timer)
+			expect(configStub.subscribe).toHaveBeenCalledTimes(2);
+
+			newStream.cancel = vi.fn();
+			await watcher.stop();
+			vi.useRealTimers();
+		});
+
 		it("after start — added field receives live changes", async () => {
 			const watcher = createWatcher();
 			watcher.field("payments.fee", Number, { default: 0.01 });
@@ -609,6 +734,25 @@ describe("ConfigWatcher", () => {
 
 			await watcher.stop();
 		});
+
+		it("handles GetConfig response with undefined config (loadSnapshotForFields false branch)", async () => {
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+
+			// Return response with config: undefined
+			configStub.getConfig.mockImplementation(
+				(_req: unknown, _meta: unknown, _opts: unknown, cb: (...args: unknown[]) => void) => {
+					cb(null, { config: undefined });
+				},
+			);
+
+			await watcher.start();
+
+			// Field should use default since no config was returned
+			expect(fee.value).toBe(0.01);
+
+			await watcher.stop();
+		});
 	});
 
 	describe("stop()", () => {
@@ -656,6 +800,38 @@ describe("ConfigWatcher", () => {
 			await iterPromise;
 
 			expect(changes).toHaveLength(0);
+		});
+
+		it("clears a pending reconnect timer when stopped during backoff", async () => {
+			vi.useFakeTimers();
+
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			// Trigger a retryable error → schedules a reconnect timer
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "temp down"));
+
+			// stop() before the timer fires → must clear the timer (lines 494-495)
+			await watcher.stop();
+
+			// Advance past the max backoff — if the timer wasn't cleared, subscribe
+			// would be called again
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// Only 1 subscribe call (from start), no reconnect
+			expect(configStub.subscribe).toHaveBeenCalledTimes(1);
+
+			vi.useRealTimers();
+		});
+
+		it("stop() is safe to call before start() (stream is null)", async () => {
+			const watcher = createWatcher();
+			// Never called start(), so this.stream === null
+			await watcher.stop();
+			// No error, stream.cancel() not called (stream was null)
+			expect(mockStream.cancel).not.toHaveBeenCalled();
 		});
 	});
 
@@ -852,6 +1028,35 @@ describe("ConfigWatcher", () => {
 			});
 
 			expect(fee.value).toBe(0.99);
+
+			await watcher.stop();
+		});
+
+		it("handles change with undefined oldValue (new field with no prior value)", async () => {
+			const watcher = createWatcher();
+			const fee = watcher.field("payments.fee", Number, { default: 0.01 });
+
+			mockGetConfigSuccess([]);
+			await watcher.start();
+
+			const handler = vi.fn();
+			fee.on("change", handler);
+
+			// Emit change with oldValue: undefined (brand-new field)
+			mockStream.emit("data", {
+				change: {
+					tenantId: "tenant-1",
+					version: 2,
+					fieldPath: "payments.fee",
+					oldValue: undefined, // <- triggers FALSE branch at line 634
+					newValue: { numberValue: 0.5 },
+					changedBy: "admin",
+					changedAt: new Date(),
+				},
+			});
+
+			expect(fee.value).toBe(0.5);
+			expect(handler).toHaveBeenCalledWith(0.01, 0.5); // oldValue is default since no prior
 
 			await watcher.stop();
 		});
@@ -1291,6 +1496,57 @@ describe("ConfigWatcher", () => {
 
 			// End after stop should not reconnect.
 			mockStream.emit("end");
+		});
+
+		it("scheduleReconnect() is a no-op when stop() is called inside subscriptionError listener (line 596)", async () => {
+			const watcher = createWatcher();
+			watcher.field("payments.fee", Number, { default: 0.01 });
+			mockGetConfigSuccess([]);
+
+			// stop() called synchronously from within the subscriptionError handler.
+			// This makes this.stopped true by the time scheduleReconnect() checks it,
+			// even though the error handler itself passed the `if (this.stopped)` guard
+			// at the top.
+			watcher.on("subscriptionError", () => {
+				void watcher.stop();
+			});
+
+			await watcher.start();
+
+			// Trigger retryable error → subscriptionError fires → stop() called →
+			// scheduleReconnect checks stopped (true) → returns early at line 596
+			mockStream.emit("error", makeServiceError(status.UNAVAILABLE, "down"));
+
+			await new Promise((r) => setTimeout(r, 10));
+
+			// No reconnect should have been scheduled
+			expect(configStub.subscribe).toHaveBeenCalledTimes(1);
+		});
+
+		it("subscribe() is a no-op when watcher is already stopped (line 553)", () => {
+			// Directly exercise the subscribe() guard by calling it on a stopped watcher
+			// via the private method cast. This covers the branch that is otherwise only
+			// reachable through a race between reloadAndSubscribe and stop().
+			const watcher = createWatcher();
+			(watcher as unknown as { stopped: boolean }).stopped = true;
+			(watcher as unknown as { subscribe: () => void }).subscribe();
+			// subscribe() must have returned early — no getConfig or gRPC subscribe calls
+			expect(configStub.getConfig).not.toHaveBeenCalled();
+			expect(configStub.subscribe).not.toHaveBeenCalled();
+		});
+
+		it("reloadAndSubscribe() exits early when watcher is already stopped (line 611)", async () => {
+			// Directly exercise the reloadAndSubscribe() guard by calling it on a stopped
+			// watcher. This covers the branch that is otherwise only reachable when
+			// stop() races with the reconnect timer firing.
+			const watcher = createWatcher();
+			(watcher as unknown as { stopped: boolean }).stopped = true;
+			await (
+				watcher as unknown as { reloadAndSubscribe: (backoff: number) => Promise<void> }
+			).reloadAndSubscribe(500);
+			// Should have returned early — no getConfig or gRPC subscribe calls
+			expect(configStub.getConfig).not.toHaveBeenCalled();
+			expect(configStub.subscribe).not.toHaveBeenCalled();
 		});
 	});
 
