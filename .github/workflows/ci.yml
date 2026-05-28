@@ -109,7 +109,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: read
+      packages: write
     steps:
       - *checkout
       - *setup-node-22
@@ -142,7 +142,7 @@ jobs:
           load: true
           tags: decree-tools
           cache-from: type=registry,ref=ghcr.io/opendecree/decree-tools:buildcache
-          cache-to: type=local,dest=/tmp/.buildx-cache-tools,mode=max
+          cache-to: type=registry,ref=ghcr.io/opendecree/decree-tools:buildcache,mode=max
 
       - name: Build server image
         uses: docker/build-push-action@v7
@@ -152,7 +152,7 @@ jobs:
           load: true
           tags: decree-server
           cache-from: type=registry,ref=ghcr.io/opendecree/decree:buildcache
-          cache-to: type=local,dest=/tmp/.buildx-cache-server,mode=max
+          cache-to: type=registry,ref=ghcr.io/opendecree/decree:buildcache,mode=max
 
       - name: Start decree stack
         run: docker compose up -d --wait service
