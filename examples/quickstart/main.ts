@@ -13,33 +13,31 @@ import { ConfigClient } from "@opendecree/sdk";
 import { getTenantId } from "../shared.js";
 
 async function main(): Promise<void> {
-  const tenantId = getTenantId();
-  const client = new ConfigClient("localhost:9090", { subject: "quickstart-example" });
+	const tenantId = getTenantId();
 
-  try {
-    // get() returns string by default.
-    const name = await client.get(tenantId, "app.name");
-    console.log(`app.name:          ${name}`);
+	// `await using` calls [Symbol.asyncDispose] automatically — no try/finally needed.
+	await using client = new ConfigClient("localhost:9090", { subject: "quickstart-example" });
 
-    // Pass a type converter for typed values.
-    const debug = await client.get(tenantId, "app.debug", Boolean);
-    console.log(`app.debug:         ${debug}`);
+	// get() returns string by default.
+	const name = await client.get(tenantId, "app.name");
+	console.log(`app.name:          ${name}`);
 
-    const rateLimit = await client.get(tenantId, "server.rate_limit", Number);
-    console.log(`server.rate_limit: ${rateLimit}`);
+	// Pass a type converter for typed values.
+	const debug = await client.get(tenantId, "app.debug", Boolean);
+	console.log(`app.debug:         ${debug}`);
 
-    const feeRate = await client.get(tenantId, "payments.fee_rate", Number);
-    console.log(`payments.fee_rate: ${feeRate}`);
+	const rateLimit = await client.get(tenantId, "server.rate_limit", Number);
+	console.log(`server.rate_limit: ${rateLimit}`);
 
-    // set() and setMany() for writes.
-    await client.set(tenantId, "app.debug", "true");
-    console.log("\nSet app.debug = true");
+	const feeRate = await client.get(tenantId, "payments.fee_rate", Number);
+	console.log(`payments.fee_rate: ${feeRate}`);
 
-    const updated = await client.get(tenantId, "app.debug", Boolean);
-    console.log(`app.debug:         ${updated}`);
-  } finally {
-    client.close();
-  }
+	// set() and setMany() for writes.
+	await client.set(tenantId, "app.debug", "true");
+	console.log("\nSet app.debug = true");
+
+	const updated = await client.get(tenantId, "app.debug", Boolean);
+	console.log(`app.debug:         ${updated}`);
 }
 
 main().catch(console.error);
