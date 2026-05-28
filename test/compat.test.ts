@@ -76,6 +76,25 @@ describe("satisfies", () => {
 		expect(satisfies([1], ">=1.0.0")).toBe(true);
 		expect(satisfies([1, 0, 0], ">=1")).toBe(true);
 	});
+
+	it("compare ?? 0 guard: sparse array makes a[i] undefined, triggering nullish coalescing", () => {
+		// compare() uses `a[i] ?? 0` and `b[i] ?? 0` as defensive guards.
+		// These are only reachable if the array has holes (undefined slots).
+		// Spreading a sparse array into [...version, ...fill] preserves undefined holes,
+		// so a[i] can be undefined inside compare().
+		const sparseVersion = [1] as number[];
+		sparseVersion.length = 3; // [1, <empty>, <empty>] — sparse array with holes
+		// satisfies pads via [...sparseVersion, ...fill]; spread of sparse keeps undefined slots.
+		// compare() then hits a[1] ?? 0 → 0, triggering the right-hand side of ??.
+		expect(satisfies(sparseVersion, ">=1.0.0")).toBe(true); // [1,0,0] >= [1,0,0]
+		expect(satisfies(sparseVersion, ">=1.0.1")).toBe(false); // [1,0,0] < [1,0,1]
+	});
+
+	// NOTE: The `default: return true` branch at line 59 of compat.ts is unreachable
+	// via normal string input. The regex /^(>=|<=|>|<|==|!=)(.+)$/ only matches
+	// those 6 operators, so `op` is always one of them when the switch is reached.
+	// There is no safe non-destructive way to reach it without monkeypatching
+	// String.prototype.match, which would be too fragile for a unit test suite.
 });
 
 describe("checkVersionCompatible", () => {
