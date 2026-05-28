@@ -141,8 +141,8 @@ jobs:
           file: _decree/build/Dockerfile.tools
           load: true
           tags: decree-tools
-          cache-from: type=registry,ref=ghcr.io/opendecree/decree-tools:buildcache
-          cache-to: type=local,dest=/tmp/.buildx-cache-tools,mode=max
+          cache-from: type=gha,scope=decree-tools
+          cache-to: type=gha,scope=decree-tools,mode=max
 
       - name: Build server image
         uses: docker/build-push-action@v7
@@ -151,8 +151,8 @@ jobs:
           file: _decree/build/Dockerfile
           load: true
           tags: decree-server
-          cache-from: type=registry,ref=ghcr.io/opendecree/decree:buildcache
-          cache-to: type=local,dest=/tmp/.buildx-cache-server,mode=max
+          cache-from: type=gha,scope=decree-server
+          cache-to: type=gha,scope=decree-server,mode=max
 
       - name: Start decree stack
         run: docker compose up -d --wait service
