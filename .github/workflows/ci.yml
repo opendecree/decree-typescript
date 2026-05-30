@@ -3,6 +3,9 @@
 # Jobs: lint, typecheck, test (matrix: Node 22/24), examples, integration → check (alls-green gate)
 # The check job aggregates all results for branch protection.
 #
+# Docs-only PRs (*.md, docs/**, examples/**/README.md) skip the entire workflow via
+# paths-ignore; GitHub marks the required status checks as passing automatically.
+#
 # The first job defines YAML anchors (&checkout, &setup-node-22, &install)
 # on its setup steps; subsequent jobs alias them to avoid repetition.
 # The test job uses its own setup-node step because the matrix node-version
@@ -19,6 +22,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "examples/**/README.md"
   workflow_call:
 
 jobs:
