@@ -1,0 +1,36 @@
+# Sentinel workflow for docs-only PRs.
+#
+# When a PR touches only *.md / docs / README files, the main CI workflow
+# (ci.yml) is skipped entirely via paths-ignore. GitHub does NOT automatically
+# mark required checks as passing when a workflow is never triggered — it only
+# does so when a workflow is triggered but individual jobs are skipped.
+#
+# This workflow fills that gap: it runs only for docs-only PRs and immediately
+# satisfies the two required checks ("CI check" and "Analyze
+# (javascript-typescript)") so branch protection does not block the merge.
+#
+# For mixed PRs (docs + code), both this workflow and ci.yml trigger.
+# All checks pass, no conflict.
+
+name: CI (docs-only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - "examples/**/README.md"
+
+jobs:
+  check:
+    name: CI check
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Docs-only PR — full CI skipped"
+
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Docs-only PR — CodeQL skipped"

@@ -4,7 +4,7 @@
 # The check job aggregates all results for branch protection.
 #
 # Docs-only PRs (*.md, docs/**, examples/**/README.md) skip the entire workflow via
-# paths-ignore; GitHub marks the required status checks as passing automatically.
+# paths-ignore. Required checks for those PRs are satisfied by ci-docs.yml.
 #
 # The first job defines YAML anchors (&checkout, &setup-node-22, &install)
 # on its setup steps; subsequent jobs alias them to avoid repetition.
