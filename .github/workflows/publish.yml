@@ -41,3 +41,39 @@ jobs:
             echo "tag=latest" >> $GITHUB_OUTPUT
           fi
       - run: npm publish --provenance --access public --tag ${{ steps.tag.outputs.tag }}
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.14"
+      - run: npm ci
+      - run: npm run build
+      - name: Create tarball
+        run: |
+          VERSION="${{ github.ref_name }}"
+          tar -czf "decree-typescript-${VERSION}.tar.gz" dist/
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if echo "$VERSION" | grep -qE 'alpha|beta|rc'; then
+            echo "flag=--prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "flag=" >> $GITHUB_OUTPUT
+          fi
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release create "$TAG" \
+            "decree-typescript-${TAG}.tar.gz" \
+            --generate-notes \
+            --title "Release ${TAG}" \
+            ${{ steps.prerelease.outputs.flag }}
