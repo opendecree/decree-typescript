@@ -32,7 +32,8 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "DECREE_INTEGRATION=1 sh -c 'cd integration && vitest run'",
     "pre-commit": "biome check src/ test/ integration/ && tsc --noEmit && vitest run",
-    "prepublishOnly": "npm run pre-commit && npm run build"
+    "prepublishOnly": "npm run pre-commit && npm run build",
+    "size": "size-limit"
   },
   "keywords": [
     "config",
@@ -60,7 +61,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
+    "@size-limit/preset-small-lib": "^11.0.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "size-limit": "^11.0.0",
     "ts-proto": "^2.11.6",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
