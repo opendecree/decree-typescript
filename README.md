@@ -113,6 +113,7 @@ Runnable examples in the [`examples/`](examples/) directory:
 
 ## Documentation
 
+- 📖 [API Reference](https://opendecree.github.io/decree-typescript) -- full TypeDoc API reference
 - [Quick Start](docs/quickstart.md) -- install, first get/set, typed gets, error handling
 - [Configuration](docs/configuration.md) -- all client options, auth, TLS, retry, timeouts
 - [Watching](docs/watching.md) -- ConfigWatcher, WatchedField, EventEmitter, async iteration

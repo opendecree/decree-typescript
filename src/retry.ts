@@ -14,14 +14,17 @@ const DEFAULT_INITIAL_BACKOFF = 100; // ms
 const DEFAULT_MAX_BACKOFF = 5000; // ms
 const DEFAULT_MULTIPLIER = 2;
 
+/** Default retryable gRPC status codes for read operations. */
 export const READ_RETRYABLE_CODES: readonly number[] = [
 	status.UNAVAILABLE,
 	status.DEADLINE_EXCEEDED,
 	status.RESOURCE_EXHAUSTED,
 ];
 
+/** Default retryable gRPC status codes for non-idempotent write operations. */
 export const WRITE_RETRYABLE_CODES: readonly number[] = [status.UNAVAILABLE];
 
+/** Default retryable gRPC status codes for idempotent write operations. */
 export const WRITE_IDEMPOTENT_RETRYABLE_CODES: readonly number[] = [
 	status.UNAVAILABLE,
 	status.DEADLINE_EXCEEDED,

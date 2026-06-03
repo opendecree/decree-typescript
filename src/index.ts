@@ -5,6 +5,7 @@
  */
 
 export { SUPPORTED_SERVER_VERSION, VERSION } from "./version.js";
+/** The proto API version this SDK targets. */
 export const PROTO_VERSION = "v1";
 
 export { createChannel } from "./channel.js";
