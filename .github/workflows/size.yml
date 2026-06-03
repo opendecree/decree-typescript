@@ -1,8 +1,7 @@
 # Bundle-size check for pull requests.
 #
-# Uses andresz1/size-limit-action to run size-limit on the PR branch and
-# post a comment with the delta vs. the base branch. Fails if any entry
-# exceeds its budget defined in .size-limit.js.
+# Runs size-limit from local node_modules (avoids npx version mismatch).
+# Posts a PR comment with current sizes and fails if any budget is exceeded.
 
 name: Size
 
@@ -38,6 +37,31 @@ jobs:
         run: npm run build
 
       - name: Check bundle size
-        uses: andresz1/size-limit-action@v1
+        id: size
+        run: |
+          ./node_modules/.bin/size-limit --json > size-output.json
+          cat size-output.json
+
+      - name: Post size comment
+        if: always() && steps.size.conclusion != 'skipped'
+        uses: actions/github-script@v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('size-output.json')) return;
+            let results;
+            try { results = JSON.parse(fs.readFileSync('size-output.json', 'utf8')); }
+            catch { return; }
+            const rows = results.map(r => {
+              const status = r.exceeded ? '❌' : '✅';
+              const size = r.size != null ? `${(r.size / 1024).toFixed(1)} kB` : 'n/a';
+              const limit = r.sizeLimit || 'none';
+              return `| ${r.name || r.path} | ${size} | ${limit} | ${status} |`;
+            }).join('\n');
+            const body = `## Bundle size\n\n| Entry | Size | Budget | Status |\n|-------|------|--------|--------|\n${rows}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
