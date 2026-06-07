@@ -198,14 +198,26 @@ Use `checkCompatibility()` to verify explicitly:
 ```typescript
 const client = new ConfigClient('localhost:9090');
 await client.checkCompatibility();
-// Throws IncompatibleServerError if server version is outside >=0.3.0,<1.0.0
+// Throws IncompatibleServerError if server version is outside >=0.8.0,<1.0.0
 ```
 
-The server version is fetched once and cached for the lifetime of the client:
+The server info is fetched once and cached for the lifetime of the client:
 
 ```typescript
-const version = await client.serverVersion;
-console.log(version); // { version: "0.3.1", commit: "abc123" }
+const info = await client.serverInfo;
+console.log(info);
+// {
+//   version: "0.8.1",
+//   commit: "abc123",
+//   features: {
+//     schema: true,
+//     config: true,
+//     audit: true,
+//     usage_tracking: false,
+//     jwt_auth: false,
+//     http_gateway: true,
+//   },
+// }
 ```
 
 ## Error Types

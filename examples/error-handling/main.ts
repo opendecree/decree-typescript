@@ -84,7 +84,12 @@ async function main(): Promise<void> {
     // --- Retry behavior ---
     console.log("\n=== Retry ===");
     console.log("Configured: 5 attempts, 200ms initial backoff, 10s max backoff");
-    console.log("Retries are automatic on UNAVAILABLE and DEADLINE_EXCEEDED.");
+    // Reads (get, getAll) retry on UNAVAILABLE, DEADLINE_EXCEEDED, and RESOURCE_EXHAUSTED.
+    // Writes (set, setMany, setNull) retry only on UNAVAILABLE by default, since the server
+    // may have already applied the write. Passing an idempotencyKey additionally enables
+    // DEADLINE_EXCEEDED retries for that write.
+    console.log("Reads retry on UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED.");
+    console.log("Writes retry only on UNAVAILABLE (pass idempotencyKey to also retry DEADLINE_EXCEEDED).");
 
     // To disable retry entirely, pass retry: false.
     const noRetryClient = new ConfigClient("localhost:9090", {
