@@ -4,7 +4,7 @@ Thank you for your interest in contributing! This guide covers how to set up you
 
 ## Prerequisites
 
-- **Node.js** (20+)
+- **Node.js** (22+)
 - **npm** (included with Node.js)
 - **Docker** (for proto generation only)
 

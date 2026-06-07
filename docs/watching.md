@@ -127,16 +127,37 @@ Non-retryable errors (e.g., `PERMISSION_DENIED`) stop the watcher.
 
 ## Lifecycle
 
-### Registration Before Start
+### Registering Fields
 
-Fields must be registered before calling `start()`. Attempting to register
-after start throws a `DecreeError`:
+Use `field()` to register fields **before** `start()`. Calling `field()` after
+`start()` throws a `DecreeError` — once the watcher is running, use `addField()`
+instead:
 
 ```typescript
 const watcher = client.watch('tenant-id');
 await watcher.start();
 watcher.field('late.field', String, { default: '' }); // throws DecreeError
 ```
+
+### Adding Fields After Start
+
+`addField()` registers a field dynamically and works both before and after
+`start()`. When called after the watcher is running, it loads the new field's
+initial value from a fresh `GetConfig` snapshot and re-opens the `Subscribe`
+stream with the updated field list — so changes to the new field start flowing
+without restarting the watcher. It returns a `Promise<WatchedField<T>>`, so
+`await` it before reading `.value`:
+
+```typescript
+await watcher.start();
+
+// Add a field after the watcher is already running.
+const label = await watcher.addField('payments.label', String, { default: '' });
+console.log(label.value); // current value from the refreshed snapshot
+```
+
+`addField()` throws a `DecreeError` if called after `stop()`. Before `start()`,
+`field()` and `addField()` are interchangeable for registration.
 
 ### Stopping
 

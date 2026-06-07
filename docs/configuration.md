@@ -76,6 +76,217 @@ can access. When `token` is set, the SDK sends it as a `Bearer` token
 in the `authorization` metadata header. The `subject`, `role`, and
 `tenantId` options are ignored.
 
+#### Rotating the Token
+
+JWTs expire. When you obtain a fresh token (e.g. just before the current one
+expires, or after a refresh-token exchange), call `setToken()` to swap it in
+for all subsequent RPCs — including watcher reconnects — without recreating the
+client:
+
+```typescript
+setToken(token: string): void
+```
+
+```typescript
+const client = new ConfigClient('production:9090', { token: initialJwt });
+
+// Later, before the current token expires:
+client.setToken(await refreshAccessToken());
+```
+
+Pass the raw JWT **without** the `Bearer ` prefix — the SDK adds it. `setToken()`
+also switches the client into JWT auth mode: it removes any metadata-header
+credentials (`x-subject`, `x-role`, `x-tenant-id`) that were set at construction
+time, so a client started in development mode can be promoted to token auth at
+runtime.
+
+## Reading and Writing Values
+
+### Reading a single value
+
+`get()` returns a string by default. Pass `String`, `Number`, or `Boolean` as
+the third argument to convert the raw value at runtime; the return type narrows
+automatically. See [Type Mapping](#type-mapping) for the full conversion table
+and its limitations.
+
+```typescript
+const fee = await client.get('tenant-id', 'payments.fee');            // string
+const retries = await client.get('tenant-id', 'payments.retries', Number); // number
+const enabled = await client.get('tenant-id', 'payments.enabled', Boolean); // boolean
+```
+
+### Reading all values
+
+`getAll()` fetches every configuration value for a tenant in one call and
+returns a plain record mapping each field path to its **string** value:
+
+```typescript
+getAll(
+  tenantId: string,
+  options?: { timeout?: number; signal?: AbortSignal },
+): Promise<Record<string, string>>
+```
+
+```typescript
+const config = await client.getAll('tenant-id');
+// {
+//   'payments.fee': '0.5',
+//   'payments.enabled': 'true',
+//   'payments.window': '24h',
+// }
+```
+
+Values are always strings here — there is no per-field converter. Each value is
+the canonical string form described in [Type Mapping](#type-mapping). Convert
+individual values yourself (e.g. `Number(config['payments.fee'])`), or use
+`get(path, Number)` when you need a typed read of a specific field.
+
+### Writing values
+
+`set()` sends the value as a string and lets the server coerce it to the
+schema-defined type. For type-safe writes that send a native proto value, prefer
+the typed setters:
+
+```typescript
+setNumber(tenantId: string, fieldPath: string, value: number, options?: SetOptions): Promise<void>
+setBool(tenantId: string, fieldPath: string, value: boolean, options?: SetOptions): Promise<void>
+setTime(tenantId: string, fieldPath: string, value: Date, options?: SetOptions): Promise<void>
+setDuration(tenantId: string, fieldPath: string, value: string, options?: SetOptions): Promise<void>
+```
+
+```typescript
+await client.setNumber('tenant-id', 'payments.fee', 0.5);
+await client.setBool('tenant-id', 'payments.enabled', true);
+await client.setTime('tenant-id', 'payments.cutoff', new Date('2026-01-01T00:00:00Z'));
+await client.setDuration('tenant-id', 'payments.window', '24h');
+```
+
+Notes:
+
+- `setNumber` sends a proto `numberValue`, `setBool` a `boolValue`, and
+  `setTime` a `timeValue` (from the `Date`).
+- `setDuration` takes a **duration string** (e.g. `"1h30m"`, `"300s"`,
+  `"500ms"`), not a number. It is sent as a string value and the server parses
+  and validates the duration format.
+- Each setter accepts the same `options` as `set()`: `timeout`,
+  `idempotencyKey` (see [Retry](#retry)), `signal` (an `AbortSignal`), and
+  `expectedChecksum` for optimistic concurrency control.
+
+### Writing multiple values atomically
+
+`setMany()` writes several fields in a single atomic request. The string-keyed
+record accepts **native JavaScript values** — `string`, `number`, `boolean`, or
+`Date` — and each is converted to the matching proto value (number →
+`numberValue`, boolean → `boolValue`, `Date` → `timeValue`, string →
+`stringValue`):
+
+```typescript
+setMany(
+  tenantId: string,
+  values: Record<string, string | number | boolean | Date>,
+  options?: {
+    description?: string;
+    timeout?: number;
+    idempotencyKey?: string;
+    signal?: AbortSignal;
+    expectedChecksums?: Record<string, string>;
+  },
+): Promise<void>
+```
+
+```typescript
+await client.setMany('tenant-id', {
+  'payments.fee': 0.5,                          // number
+  'payments.enabled': true,                     // boolean
+  'payments.cutoff': new Date('2026-01-01T00:00:00Z'), // Date
+  'payments.window': '24h',                     // string (e.g. a duration)
+}, {
+  description: 'Q1 payment config update',
+});
+```
+
+The optional `description` is recorded in the audit log. `expectedChecksums`
+maps individual field paths to their expected checksums for per-field optimistic
+concurrency control. As with the single-field setters, durations are passed as
+strings.
+
+## Type Mapping
+
+OpenDecree stores every value internally as a string. The server's schema gives
+each field a type (the Go/`FieldType` column below); on the wire that value
+travels inside a `TypedValue` proto, and the SDK converts it to a TypeScript
+value at the boundary. The table shows the full round trip.
+
+| Schema type (`FieldType`) | Proto `TypedValue` field | Raw string wire form | `get()` converter | TypeScript value you get |
+|---------------------------|--------------------------|----------------------|-------------------|--------------------------|
+| `integer` | `integerValue` | decimal string, e.g. `"42"`, `"-1"` | `Number` | `number` (throws if outside safe-integer range — see below) |
+| `number` | `numberValue` | decimal string, e.g. `"3.14"`, `"0.025"` | `Number` | `number` |
+| `string` | `stringValue` | the string itself | `String` (default) | `string` |
+| `bool` | `boolValue` | `"true"` or `"false"` | `Boolean` | `boolean` |
+| `time` | `timeValue` | RFC 3339 timestamp, e.g. `"2025-01-15T09:30:00.000Z"` | `String` only | `string` |
+| `duration` | `durationValue` | Go-style duration, e.g. `"24h"`, `"30m"`, `"45s"`, `"1.5s"`, `"0s"` | `String` only | `string` |
+| `url` | `urlValue` | the absolute URL string | `String` only | `string` |
+| `json` | `jsonValue` | JSON-encoded string, e.g. `'{"key":"value"}'` | `String` only | `string` |
+
+### `time`, `duration`, `url`, and `json` come back as strings
+
+The `get()` and `WatchedField` converters are limited to `String`, `Number`, and
+`Boolean` (the `Converter` type). There is no built-in converter for `time`,
+`duration`, `url`, or `json`, so values of those types are returned as their
+canonical string form and you parse them yourself:
+
+```typescript
+// time → ISO 8601 / RFC 3339 string
+const cutoffStr = await client.get('tenant-id', 'payments.cutoff');
+const cutoff = new Date(cutoffStr); // "2025-01-15T09:30:00.000Z" → Date
+
+// duration → Go-style duration string (parse as needed)
+const window = await client.get('tenant-id', 'payments.window'); // "24h"
+
+// url → string
+const endpoint = await client.get('tenant-id', 'payments.endpoint'); // "https://..."
+
+// json → JSON-encoded string
+const raw = await client.get('tenant-id', 'payments.options');
+const options = JSON.parse(raw); // { ... }
+```
+
+`getAll()` returns these same canonical strings for every field.
+
+### Converters are limited to `String` / `Number` / `Boolean`
+
+The third argument to `get()` (and `watcher.field()` / `watcher.addField()`)
+must be one of the built-in constructors `String`, `Number`, or `Boolean`.
+Passing anything else throws a `TypeMismatchError` (`"unsupported converter
+type"`). To turn a `time`, `duration`, `url`, or `json` value into a richer
+type, read it as a string and convert it in your own code.
+
+### Large integers and the BigInt caveat
+
+JavaScript's `number` is an IEEE-754 double, so integers beyond
+`Number.MAX_SAFE_INTEGER` (2^53 − 1) and below `Number.MIN_SAFE_INTEGER` lose
+precision. To avoid silently returning a wrong value, the `Number` converter
+**rejects** integer strings outside the safe range and throws a
+`TypeMismatchError`:
+
+```typescript
+// "9007199254740992" (MAX_SAFE_INTEGER + 1)
+await client.get('tenant-id', 'counters.big', Number);
+// throws TypeMismatchError: integer "9007199254740992" exceeds safe integer range; use BigInt
+```
+
+For values that may exceed the safe-integer range, read the field as a string
+and construct a `BigInt` yourself:
+
+```typescript
+const raw = await client.get('tenant-id', 'counters.big'); // string
+const big = BigInt(raw);
+```
+
+This guard only applies to **integer-valued** strings. Large floating-point
+values (e.g. `"1e20"`) are not integers and convert without throwing — they are
+inherently approximate.
+
 ## TLS
 
 By default, the SDK connects with TLS using the system certificate store. To
