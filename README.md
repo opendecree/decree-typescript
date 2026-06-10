@@ -4,6 +4,8 @@
 [![npm](https://img.shields.io/npm/v/@opendecree/sdk)](https://www.npmjs.com/package/@opendecree/sdk)
 [![License](https://img.shields.io/github/license/opendecree/decree-typescript)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-opendecree.github.io-teal)](https://opendecree.github.io/decree-typescript)
+[![codecov](https://codecov.io/gh/opendecree/decree-typescript/graph/badge.svg)](https://codecov.io/gh/opendecree/decree-typescript)
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/opendecree/decree-typescript)
 
 TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-driven configuration management.
