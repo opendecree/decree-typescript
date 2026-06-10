@@ -15,6 +15,7 @@ TypeScript SDK for [OpenDecree](https://github.com/opendecree/decree) -- schema-
 ## Requirements
 
 - Node.js **≥ 22** (ESM-only package — CommonJS is not supported)
+- A running OpenDecree server (v0.8.0 – v0.x, pre-1.0)
 
 ## Install
 
@@ -116,11 +117,6 @@ Runnable examples in the [`examples/`](examples/) directory:
 - [Quick Start](docs/quickstart.md) -- install, first get/set, typed gets, error handling
 - [Configuration](docs/configuration.md) -- all client options, auth, TLS, retry, timeouts
 - [Watching](docs/watching.md) -- ConfigWatcher, WatchedField, EventEmitter, async iteration
-
-## Requirements
-
-- Node.js 22+
-- A running OpenDecree server (v0.8.0 – v0.x, pre-1.0)
 
 ## Questions?
 
