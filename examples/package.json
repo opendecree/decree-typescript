@@ -11,6 +11,6 @@
     "@opendecree/sdk": "file:../"
   },
   "devDependencies": {
-    "@types/node": ">=20"
+    "@types/node": ">=25"
   }
 }
