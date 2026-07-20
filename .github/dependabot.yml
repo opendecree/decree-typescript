@@ -15,6 +15,11 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # typedoc@0.28 peer dep caps at typescript 6.0.x; only TS7 support is a 1.0.0-dev preview
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: github-actions
     directory: /
