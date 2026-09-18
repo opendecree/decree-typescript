@@ -64,7 +64,7 @@
     "@biomejs/biome": "^2.4.13",
     "@size-limit/preset-small-lib": "^13.0.1",
     "@vitest/coverage-v8": "^4.1.5",
-    "size-limit": "^13.0.1",
+    "size-limit": "^14.0.0",
     "ts-proto": "^2.11.6",
     "typedoc": "^0.28.0",
     "typescript": "^6.0.3",
