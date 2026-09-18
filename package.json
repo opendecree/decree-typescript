@@ -62,7 +62,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
-    "@size-limit/preset-small-lib": "^13.0.1",
+    "@size-limit/preset-small-lib": "^14.0.0",
     "@vitest/coverage-v8": "^4.1.5",
     "size-limit": "^13.0.1",
     "ts-proto": "^2.11.6",
